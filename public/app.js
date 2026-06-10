@@ -231,7 +231,14 @@ function escapeHtml(s) {
 // 文本/图片编辑期间，离开当前编辑器（点别的文件、跳目录、关预览）都要先确认，
 // 否则会静默丢掉改动。dirtyCheck 在进入编辑器时挂上，保存/确认离开后清空。
 let dirtyCheck = null; // () => boolean，true=有未保存改动；null=当前没有编辑器
+let autosaveFlush = null; // 自动保存编辑器挂上：离开前把未落盘的改动写掉，不弹「放弃？」
 async function guardDirty() {
+  if (autosaveFlush) {
+    const f = autosaveFlush;
+    autosaveFlush = null; dirtyCheck = null;
+    await f();
+    return true;
+  }
   if (dirtyCheck && dirtyCheck()) {
     const ok = await confirmDialog('当前编辑有未保存的改动，放弃并离开？');
     if (!ok) return false;
@@ -239,6 +246,7 @@ async function guardDirty() {
   dirtyCheck = null;
   return true;
 }
+const isMdName = (n) => /\.(md|markdown)$/i.test(String(n || ''));
 
 // ---------- 导航 ----------
 async function navigate(p, pushHistory = true) {
@@ -505,6 +513,7 @@ async function openPreview(e) {
   } else if (k === 'pdf') {
     body.innerHTML = `<iframe class="iframe-preview" src="/api/raw?path=${encodeURIComponent(e.path)}"></iframe>`;
   } else if (k === 'text') {
+    if (isMdName(e.name)) return enterEditMode(e); // md 预览即编辑：打开就是所见即所得，自动保存
     renderTextPreview(await api('/api/read?path=' + encodeURIComponent(e.path)));
   } else {
     body.innerHTML = `<div class="empty-state"><div class="big">${iconSvg(e, 48)}</div>这个文件类型无法预览<br><br>${fmtSize(e.size)}</div>`;
@@ -601,7 +610,7 @@ function renderPreviewActions(e) {
   // 图标为主、文字精简：主操作「打开」留字，其余只留图标 + tooltip
   const acts = [
     { icon: ic('link', 'currentColor', 14), label: '打开', title: '默认应用打开', cls: 'primary', fn: () => openWith(e.path, 'default') },
-    ...(e.kind === 'text' ? [{ icon: ic('edit3', 'currentColor', 15), title: '编辑文本', fn: () => enterEditMode(e) }] : []),
+    ...(e.kind === 'text' && !isMdName(e.name) ? [{ icon: ic('edit3', 'currentColor', 15), title: '编辑文本', fn: () => enterEditMode(e) }] : []), // md 预览即编辑，无需入口
     ...(e.kind === 'text' ? [{ icon: ic('gitbranch', 'currentColor', 15), title: '查看改动（HEAD vs 当前）', fn: () => showDiff(e) }] : []),
     ...(e.kind === 'image' ? [{ icon: ic('edit3', 'currentColor', 15), title: '编辑图片', fn: () => enterImageEdit(e) }] : []),
     { icon: ic('term', 'currentColor', 15), title: '在编辑器打开', fn: () => openWith(e.path, 'editor') },
@@ -1015,7 +1024,12 @@ async function enterEditMode(e) {
   const body = $('#preview-body');
   body.innerHTML = '<div class="cmdk-loading">加载中…</div>';
   const data = await api('/api/read?path=' + encodeURIComponent(e.path));
-  if (data.tooLarge) { toast('文件太大，暂不支持原地编辑', true); openPreview(e); return; }
+  if (data.tooLarge) {
+    toast('文件太大，暂不支持原地编辑', true);
+    if (isMdName(e.name)) { renderTextPreview(data); return; } // md 预览即编辑，回 openPreview 会循环
+    openPreview(e); return;
+  }
+  if (isMdName(e.name)) return mdEditor(e, data); // md：所见即所得 + 自动保存 + 源码切换
   const ex = (data.ext || '').toLowerCase();
   let baseMtime = data.mtime; // 并发覆盖保护基准
   let getValue, baseline = ''; // baseline：编辑器内的「已保存基准」，用于未保存守卫
@@ -1043,27 +1057,7 @@ async function enterEditMode(e) {
   // 挂上未保存守卫：离开编辑器（切文件/跳目录/关预览）前比对当前值与已保存基准
   dirtyCheck = () => !!getValue && getValue() !== baseline;
 
-  const isMd = ex === 'md' || ex === 'markdown';
-  const C = isMd ? await crepe.load() : null;
-  if (C) {
-    body.innerHTML =
-      `<div class="editor-bar"><button id="ed-save" class="primary">保存</button><button id="ed-cancel" class="ghost-btn">完成</button><span class="editor-hint">所见即所得 · ⌘S 保存 · Esc 完成</span></div>` +
-      `<div id="ed-host" class="crepe-host"></div>`;
-    const host = $('#ed-host');
-    // 保护 YAML frontmatter：Crepe 不识别会丢掉，剥离后只把正文交给它，保存时再拼回
-    const fm = /^(---\r?\n[\s\S]*?\r?\n---\r?\n)/.exec(data.content || '');
-    const front = fm ? fm[1] : '';
-    const inst = new C.Crepe({ root: host, defaultValue: front ? (data.content || '').slice(front.length) : (data.content || '') });
-    await inst.create();
-    crepe.editor = inst;
-    getValue = () => front + inst.getMarkdown();
-    // ⌘S 保存 / Esc 完成：捕获阶段拦在 ProseMirror 与全局键盘导航之前
-    host.addEventListener('keydown', (ev) => {
-      if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') { ev.preventDefault(); ev.stopPropagation(); save(); }
-      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); leave(); }
-    }, true);
-    setTimeout(() => host.querySelector('[contenteditable]')?.focus(), 0);
-  } else if (await mona.load()) {
+  if (await mona.load()) {
     const monaco = window.monaco;
     body.innerHTML =
       `<div class="editor-bar"><button id="ed-save" class="primary">保存</button><button id="ed-cancel" class="ghost-btn">完成</button><span class="editor-hint">⌘S 保存 · ⌘F 查找 · Esc 完成</span></div>` +
@@ -1098,6 +1092,95 @@ async function enterEditMode(e) {
   baseline = getValue ? getValue() : ''; // 以编辑器初始内容（Crepe 已规范化）为基准，避免误报未保存
   $('#ed-save').onclick = () => save();
   $('#ed-cancel').onclick = () => leave();
+}
+// md 预览即编辑：打开就是 Crepe 所见即所得，停笔 0.8s 自动落盘；「源码」按钮切 Monaco。
+// 离开（切文件/跳目录/关预览）由 guardDirty 的 autosaveFlush 把残余改动写掉，不弹确认框。
+async function mdEditor(e, data, mode = 'rich') {
+  const body = $('#preview-body');
+  let baseMtime = data.mtime;
+  let content0 = data.content || '';
+  let getValue = null, baseline = '';
+  let timer = null, paused = false;
+  let chain = Promise.resolve(); // 写盘串行化：防抖到点的保存和离开时的 flush 不互相踩
+  const setStatus = (t) => { const s = $('#md-status'); if (s) s.textContent = t; };
+  const doSave = async (force) => {
+    if (!getValue || paused) return;
+    const content = getValue();
+    if (content === baseline) return;
+    setStatus('保存中…');
+    const r = await apiPost('/api/write', { path: e.path, content, expectedMtime: force ? 0 : baseMtime });
+    if (r.conflict) {
+      paused = true;
+      const ok = await confirmDialog('文件已被外部修改（可能是 agent 改的）。覆盖会丢掉外部改动，确定覆盖？');
+      paused = false;
+      if (ok) return doSave(true);
+      setStatus('未保存：文件被外部修改');
+      return;
+    }
+    if (r.ok === false || r.error) { setStatus('保存失败'); toast('保存失败：' + (r.error || ''), true); return; }
+    baseMtime = r.mtime; baseline = content;
+    setStatus('已保存');
+  };
+  const queue = () => { clearTimeout(timer); timer = setTimeout(() => { chain = chain.then(() => doSave()); }, 800); };
+  const flush = () => { clearTimeout(timer); chain = chain.then(() => doSave()); return chain; };
+  autosaveFlush = flush;
+  dirtyCheck = null;
+  const render = async (m) => {
+    mode = m;
+    mona.disposeIfAny(); crepe.disposeIfAny();
+    body.innerHTML =
+      `<div class="editor-bar"><button id="md-mode" class="ghost-btn">${m === 'rich' ? '源码' : '富文本'}</button><span id="md-status" class="editor-hint">自动保存 · ⌘S 立即保存</span></div>` +
+      `<div id="ed-host" class="${m === 'rich' ? 'crepe-host' : 'mona-host'}"></div>`;
+    $('#md-mode').onclick = async () => {
+      await flush();
+      content0 = getValue ? getValue() : content0;
+      render(m === 'rich' ? 'code' : 'rich');
+    };
+    const host = $('#ed-host');
+    if (m === 'rich') {
+      const C = await crepe.load();
+      if (!C) { render('code'); return; } // Crepe 加载失败 → 源码模式兜底
+      // 保护 YAML frontmatter：Crepe 不识别会丢掉，剥离后只把正文交给它，保存时再拼回
+      const fm = /^(---\r?\n[\s\S]*?\r?\n---\r?\n)/.exec(content0);
+      const front = fm ? fm[1] : '';
+      const inst = new C.Crepe({ root: host, defaultValue: front ? content0.slice(front.length) : content0 });
+      try { inst.on((l) => l.markdownUpdated(() => queue())); } catch { /* 旧版 Crepe 无 .on，靠下面的 input 兜底 */ }
+      host.addEventListener('input', () => queue(), true); // 兜底：键入路径一定触发
+      await inst.create();
+      crepe.editor = inst;
+      getValue = () => front + inst.getMarkdown();
+      // ⌘S 立即保存：捕获阶段拦在 ProseMirror 与全局键盘导航之前
+      host.addEventListener('keydown', (ev) => {
+        if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') { ev.preventDefault(); ev.stopPropagation(); flush(); }
+      }, true);
+    } else if (await mona.load()) {
+      const monaco = window.monaco;
+      const ed = monaco.editor.create(host, {
+        value: content0, language: 'markdown', theme: mona.themeName(),
+        fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace',
+        fontSize: 13, lineHeight: 1.7, automaticLayout: true, minimap: { enabled: false },
+        scrollBeyondLastLine: false, renderWhitespace: 'none', tabSize: 2, wordWrap: 'on',
+        smoothScrolling: true, padding: { top: 10, bottom: 10 }, fontLigatures: true,
+      });
+      mona.editor = ed;
+      getValue = () => ed.getValue();
+      ed.onDidChangeModelContent(() => queue());
+      ed.addCommand(monaco.KeyMod.CmdCtrl | monaco.KeyCode.KeyS, () => flush());
+    } else {
+      const ta = document.createElement('textarea');
+      ta.id = 'ed-host'; ta.className = 'editor-area'; ta.spellcheck = false;
+      host.replaceWith(ta);
+      ta.value = content0;
+      getValue = () => ta.value;
+      ta.addEventListener('input', () => queue());
+      ta.addEventListener('keydown', (ev) => {
+        if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') { ev.preventDefault(); flush(); }
+        ev.stopPropagation(); // 别冒泡到主区键盘导航
+      });
+    }
+    baseline = getValue(); // 以编辑器规范化后的内容为基准：打开不编辑就不会触发写盘
+  };
+  await render(mode);
 }
 async function doRename(e) {
   const name = await inputDialog('重命名', e.name, '输入新名称');
