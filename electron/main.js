@@ -162,8 +162,8 @@ async function checkUpdate(opts) {
   if (!info) {
     if (manual) {
       dialog.showMessageBoxSync(win && !win.isDestroyed() ? win : undefined, {
-        type: 'warning', buttons: ['好'], message: '检查更新失败',
-        detail: '没连上 GitHub（网络问题或接口限流），稍后再试。',
+        type: 'warning', buttons: [M('好', 'OK')], message: M('检查更新失败', 'Update check failed'),
+        detail: M('没连上 GitHub（网络问题或接口限流），稍后再试。', 'Could not reach GitHub (network issue or rate limit). Try again later.'),
       });
     } else if (updRetry < 3) { updRetry++; setTimeout(checkUpdate, 10 * 60 * 1000); } // 失败别干等 12 小时
     return;
@@ -178,15 +178,15 @@ async function checkUpdate(opts) {
     const owner = win && !win.isDestroyed() ? win : undefined;
     if (newer) {
       const c = dialog.showMessageBoxSync(owner, {
-        type: 'info', buttons: ['去下载', '取消'], defaultId: 0, cancelId: 1,
-        message: `发现新版本 v${pendingUpdate.version}`,
-        detail: `当前版本 v${app.getVersion()}。点「去下载」打开发布页，下载后替换 /Applications 里的旧版即可。`,
+        type: 'info', buttons: [M('去下载', 'Download'), M('取消', 'Cancel')], defaultId: 0, cancelId: 1,
+        message: M(`发现新版本 v${pendingUpdate.version}`, `New version v${pendingUpdate.version} available`),
+        detail: M(`当前版本 v${app.getVersion()}。点「去下载」打开发布页，下载后替换 /Applications 里的旧版即可。`, `You are on v${app.getVersion()}. "Download" opens the release page; replace the old app in /Applications.`),
       });
       if (c === 0) shell.openExternal(pendingUpdate.url);
     } else {
       dialog.showMessageBoxSync(owner, {
-        type: 'info', buttons: ['好'], message: '已是最新版本',
-        detail: `当前版本 v${app.getVersion()} 就是最新发布版。`,
+        type: 'info', buttons: [M('好', 'OK')], message: M('已是最新版本', 'You are up to date'),
+        detail: M(`当前版本 v${app.getVersion()} 就是最新发布版。`, `v${app.getVersion()} is the latest release.`),
       });
     }
   }
@@ -194,33 +194,43 @@ async function checkUpdate(opts) {
 ipcMain.handle('update:open', (e, { url }) => { if (/^https:\/\/github\.com\//.test(String(url))) shell.openExternal(url); });
 ipcMain.handle('update:get', () => pendingUpdate);
 
+// 界面语言：用户手动选过的存在 ~/.fanbox/config.json（渲染层切换时写入），没选过跟随系统
+function uiLang() {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.fanbox', 'config.json'), 'utf8'));
+    if (c.lang === 'zh' || c.lang === 'en') return c.lang;
+  } catch { /* 没配置过 */ }
+  return String(app.getLocale() || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+}
+const M = (zh, en) => (uiLang() === 'zh' ? zh : en);
+
 // 原生菜单——关键是 Edit role，终端里的 ⌘C/⌘V 才生效
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const template = [
     ...(isMac ? [{ label: 'FanBox', submenu: [
-      { role: 'about', label: '关于 FanBox' },
-      { label: '检查更新…', click: () => checkUpdate({ manual: true }) },
+      { role: 'about', label: M('关于 FanBox', 'About FanBox') },
+      { label: M('检查更新…', 'Check for Updates…'), click: () => checkUpdate({ manual: true }) },
       { type: 'separator' },
-      { role: 'hide', label: '隐藏 FanBox' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '全部显示' },
+      { role: 'hide', label: M('隐藏 FanBox', 'Hide FanBox') }, { role: 'hideOthers', label: M('隐藏其他', 'Hide Others') }, { role: 'unhide', label: M('全部显示', 'Show All') },
       { type: 'separator' },
-      { role: 'quit', label: '退出 FanBox' },
+      { role: 'quit', label: M('退出 FanBox', 'Quit FanBox') },
     ] }] : []),
-    { label: '文件', submenu: [
-      ...(isMac ? [] : [{ label: '检查更新…', click: () => checkUpdate({ manual: true }) }, { type: 'separator' }]),
+    { label: M('文件', 'File'), submenu: [
+      ...(isMac ? [] : [{ label: M('检查更新…', 'Check for Updates…'), click: () => checkUpdate({ manual: true }) }, { type: 'separator' }]),
       isMac ? { role: 'close' } : { role: 'quit' },
     ] },
-    { label: '编辑', submenu: [
-      { role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' },
-      { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' },
-      { role: 'selectAll', label: '全选' },
+    { label: M('编辑', 'Edit'), submenu: [
+      { role: 'undo', label: M('撤销', 'Undo') }, { role: 'redo', label: M('重做', 'Redo') }, { type: 'separator' },
+      { role: 'cut', label: M('剪切', 'Cut') }, { role: 'copy', label: M('复制', 'Copy') }, { role: 'paste', label: M('粘贴', 'Paste') },
+      { role: 'selectAll', label: M('全选', 'Select All') },
     ] },
-    { label: '视图', submenu: [
-      { role: 'reload', label: '重新加载' }, { role: 'toggleDevTools', label: '开发者工具' },
+    { label: M('视图', 'View'), submenu: [
+      { role: 'reload', label: M('重新加载', 'Reload') }, { role: 'toggleDevTools', label: M('开发者工具', 'Developer Tools') },
       { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
-      { type: 'separator' }, { role: 'togglefullscreen', label: '全屏' },
+      { type: 'separator' }, { role: 'togglefullscreen', label: M('全屏', 'Full Screen') },
     ] },
-    { role: 'window', label: '窗口', submenu: [{ role: 'minimize', label: '最小化' }, { role: 'zoom' }] },
+    { role: 'window', label: M('窗口', 'Window'), submenu: [{ role: 'minimize', label: M('最小化', 'Minimize') }, { role: 'zoom' }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -232,11 +242,11 @@ app.on('before-quit', (e) => {
   e.preventDefault();
   const choice = dialog.showMessageBoxSync(win && !win.isDestroyed() ? win : undefined, {
     type: 'warning',
-    buttons: ['取消', '退出'],
+    buttons: [M('取消', 'Cancel'), M('退出', 'Quit')],
     defaultId: 0,
     cancelId: 0,
-    message: `还有 ${terminals.size} 个终端会话在运行`,
-    detail: '退出会终止正在运行的 agent 任务，确定退出？',
+    message: M(`还有 ${terminals.size} 个终端会话在运行`, `${terminals.size} terminal session(s) still running`),
+    detail: M('退出会终止正在运行的 agent 任务，确定退出？', 'Quitting will terminate running agent tasks. Quit anyway?'),
   });
   if (choice === 1) { quitConfirmed = true; app.quit(); }
 });

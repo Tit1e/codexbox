@@ -1892,6 +1892,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/project-memory') {
       return sendJSON(res, 200, await projectMemory(url.searchParams.get('path')));
     }
+    if (p === '/api/lang' && req.method === 'POST') {
+      const b = await readBody(req);
+      const lang = b.lang === 'en' ? 'en' : 'zh';
+      await updateConfig((c) => { c.lang = lang; });
+      return sendJSON(res, 200, { ok: true, lang });
+    }
     if (p === '/api/organize/config') {
       return sendJSON(res, 200, await organizeConfig());
     }
