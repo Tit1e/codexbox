@@ -495,6 +495,17 @@ kbd {
 #preview-resizer:hover::after, #preview-resizer.dragging::after,
 #terminal-resizer:hover::after, #terminal-resizer.dragging::after { opacity: 0.55; }
 .pv-img { cursor: zoom-in; }
+/* 透明图垫棋盘格，白色/透明 PNG 也能看清边界 */
+.grid .item .icon .thumb, .pv-img, .lightbox img, .list .row .icon .thumb-sm {
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text) 11%, transparent) 0% 25%, transparent 0% 50%) 0 0 / 14px 14px, var(--bg-3);
+}
+/* 压缩包内容清单 */
+.arch-list { font-family: var(--font-mono); font-size: 12px; padding: 4px 0; }
+.arch-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 8px; border-radius: 5px; }
+.arch-row:hover { background: var(--bg-3); }
+.arch-row.is-dir .arch-name { color: var(--text-dim); }
+.arch-name { word-break: break-all; white-space: normal; }
+.arch-size { color: var(--text-faint); flex: none; }
 .pv-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 
 /* CSV 表格 */

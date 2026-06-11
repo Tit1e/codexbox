@@ -11,6 +11,13 @@
 
 ## [Unreleased]
 
+### Added
+- 压缩包预览（#3）：zip/jar/tar/tgz/gz 在预览面板列出内容清单和单项大小，全用系统自带工具（unzip/bsdtar/gzip），保持零依赖
+- 透明图棋盘格（#1）：缩略图、预览大图、灯箱给图片垫棋盘格底，白色/透明 PNG 一眼可辨
+
+### Fixed
+- 透明 PNG/GIF/WebP 缩略图被拍成白底：sips 一律出 jpeg 丢了透明通道，带透明可能的格式改出 png
+
 ## [1.5.2] - 2026-06-11
 
 ### Changed

@@ -532,6 +532,15 @@ async function openPreview(e) {
   } else if (k === 'text') {
     if (isMdName(e.name)) return enterEditMode(e); // md 预览即编辑：打开就是所见即所得，自动保存
     renderTextPreview(await api('/api/read?path=' + encodeURIComponent(e.path)));
+  } else if (k === 'archive') {
+    const d = await api('/api/archive?path=' + encodeURIComponent(e.path));
+    if (!d.ok) {
+      body.innerHTML = `<div class="empty-state"><div class="big">${iconSvg(e, 48)}</div>${escapeHtml(d.error || '无法读取')}<br><br>${fmtSize(e.size)}</div>`;
+    } else {
+      const rows = d.entries.map((en) =>
+        `<div class="arch-row${en.name.endsWith('/') ? ' is-dir' : ''}"><span class="arch-name">${escapeHtml(en.name)}</span><span class="arch-size">${en.size != null ? fmtSize(en.size) : ''}</span></div>`).join('');
+      body.innerHTML = `<div class="preview-meta"><span>${fmtSize(e.size)}</span><span>${d.entries.length}${d.truncated ? '+' : ''} 项</span></div><div class="arch-list">${rows}</div>`;
+    }
   } else {
     body.innerHTML = `<div class="empty-state"><div class="big">${iconSvg(e, 48)}</div>这个文件类型无法预览<br><br>${fmtSize(e.size)}</div>`;
   }

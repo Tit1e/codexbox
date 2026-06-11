@@ -43,6 +43,7 @@ const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'i
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv']);
 const AUDIO_EXT = new Set(['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac']);
 const PDF_EXT = new Set(['pdf']);
+const ARCHIVE_EXT = new Set(['zip', 'jar', 'tar', 'tgz', 'gz', 'bz2', 'xz', '7z', 'rar']);
 
 const MIME = {
   html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8',
@@ -82,6 +83,7 @@ function kindOf(name, isDir) {
   if (VIDEO_EXT.has(e)) return 'video';
   if (AUDIO_EXT.has(e)) return 'audio';
   if (PDF_EXT.has(e)) return 'pdf';
+  if (ARCHIVE_EXT.has(e)) return 'archive';
   if (TEXT_EXT.has(e) || /^(dockerfile|makefile|readme|license|\.[a-z]+rc)$/i.test(name)) return 'text';
   return 'other';
 }
@@ -477,6 +479,44 @@ async function renamePath(p, newName) {
   return { ok: true, path: dst };
 }
 
+// 压缩包内容清单：全用系统自带工具（unzip / bsdtar / gzip），保持零依赖
+async function archiveList(p) {
+  const file = resolvePath(p);
+  try { await fsp.stat(file); } catch { return { ok: false, error: '文件不存在' }; }
+  const name = path.basename(file).toLowerCase();
+  const run = (cmd, args) => new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 15000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(stdout)));
+  });
+  const MAX = 800;
+  const entries = [];
+  try {
+    if (/\.(zip|jar)$/.test(name)) {
+      const out = await run('unzip', ['-l', '--', file]);
+      for (const line of out.split('\n')) {
+        const m = line.match(/^\s*(\d+)\s+\S+\s+\S+\s+(.+)$/);
+        if (m) entries.push({ name: m[2], size: Number(m[1]) });
+        if (entries.length > MAX) break;
+      }
+    } else if (/\.(tar|tgz|tbz2?|txz)$/.test(name) || /\.tar\.(gz|bz2|xz|zst)$/.test(name)) {
+      const out = await run('tar', ['-tf', file]); // bsdtar 自动识别压缩格式
+      for (const line of out.split('\n')) {
+        if (line.trim()) entries.push({ name: line });
+        if (entries.length > MAX) break;
+      }
+    } else if (/\.gz$/.test(name)) {
+      const out = await run('gzip', ['-l', file]);
+      const m = out.split('\n')[1] && out.split('\n')[1].match(/^\s*\d+\s+(\d+)/);
+      entries.push({ name: path.basename(file, '.gz'), size: m ? Number(m[1]) : undefined });
+    } else {
+      return { ok: false, error: '7z / rar 没有系统自带的解析工具，可在系统解压软件中打开' };
+    }
+  } catch (e) {
+    return { ok: false, error: '读取失败：' + (e.message || '').split('\n')[0] };
+  }
+  const truncated = entries.length > MAX;
+  return { ok: true, entries: entries.slice(0, MAX), truncated };
+}
+
 async function createEntry(parentPath, name, type) {
   const parent = resolvePath(parentPath);
   name = (name || '').trim();
@@ -687,6 +727,7 @@ async function serveStatic(req, res, urlPath) {
 
 // ---------- 缩略图（性能关键：不再把原图/原视频整文件当缩略图）----------
 const THUMB_IMG_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'heif', 'avif']);
+const ALPHA_IMG_EXT = new Set(['png', 'gif', 'webp', 'avif']); // 可能带透明通道：缩略图必须出 png，jpeg 会把透明拍成白底
 const thumbInflight = new Map(); // cacheFile -> Promise，去重并发生成
 function run(cmd, args) {
   return new Promise((resolve, reject) => execFile(cmd, args, { timeout: 15000 }, (e) => (e ? reject(e) : resolve())));
@@ -695,7 +736,8 @@ function run(cmd, args) {
 async function generateThumb(src, e, size, cacheFile, isImg) {
   await fsp.mkdir(THUMB_DIR, { recursive: true });
   if (isImg) {
-    await run('sips', ['-s', 'format', 'jpeg', '-Z', String(size), src, '--out', cacheFile]);
+    const fmt = cacheFile.endsWith('.png') ? 'png' : 'jpeg';
+    await run('sips', ['-s', 'format', fmt, '-Z', String(size), src, '--out', cacheFile]);
     return;
   }
   const tmpDir = path.join(THUMB_DIR, '_ql_' + process.pid + '_' + crypto.randomBytes(4).toString('hex'));
@@ -732,8 +774,9 @@ async function serveThumb(req, res, p, size) {
   const e = ext(src);
   const isImg = THUMB_IMG_EXT.has(e);
   const key = crypto.createHash('md5').update(src + ':' + st.mtimeMs + ':' + s).digest('hex');
-  const cacheFile = path.join(THUMB_DIR, key + (isImg ? '.jpg' : '.png'));
-  const type = isImg ? 'image/jpeg' : 'image/png';
+  const jpegOut = isImg && !ALPHA_IMG_EXT.has(e);
+  const cacheFile = path.join(THUMB_DIR, key + (jpegOut ? '.jpg' : '.png'));
+  const type = jpegOut ? 'image/jpeg' : 'image/png';
   const sendCache = () => {
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'max-age=604800' });
     const rs = fs.createReadStream(cacheFile);
@@ -1459,6 +1502,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       try { return sendJSON(res, 200, await writeTextFile(b.path, b.content, b.expectedMtime)); }
       catch (e) { return sendJSON(res, 200, { ok: false, conflict: !!e.conflict, error: e.message }); }
+    }
+    if (p === '/api/archive') {
+      return sendJSON(res, 200, await archiveList(url.searchParams.get('path')));
     }
     if (p === '/api/trash' && req.method === 'POST') {
       const b = await readBody(req);
