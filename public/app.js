@@ -144,7 +144,8 @@ const CODE_BADGES = {
 };
 const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'gz', 'tar', 'tgz', 'bz2', 'xz']);
 // 终端裸文件名识别的扩展名白名单：没有它 e.g/node.js/v1.2 这类词全是误报下划线
-const TERM_LINK_RE_BARE = /(?<=^|[\s'"`(\[（【>：:=])[\p{L}\p{N}_@][\p{L}\p{N}_.\-@/]*\.(?:md|markdown|txt|pdf|png|jpe?g|gif|webp|svg|avif|heic|icns|ico|mp4|mov|webm|mkv|mp3|wav|m4a|flac|json|jsonl|js|mjs|cjs|ts|tsx|jsx|css|scss|sass|less|html?|xml|ya?ml|toml|ini|conf|lock|log|sh|zsh|bash|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sql|csv|tsv|xlsx?|docx?|pptx?|key|numbers|pages|zip|tar|gz|tgz|dmg|app|plist|epub|srt|vtt|command)(?=$|[.\s'"`)\],:;。，）】])/gu;
+// 首尾边界都含全角胶水标点：「生成了 a.png、b.png」顿号列举的两个名字才都识别得到
+const TERM_LINK_RE_BARE = /(?<=^|[\s'"`(\[（【>：:=；，。、？！])[\p{L}\p{N}_@][\p{L}\p{N}_.\-@/]*\.(?:md|markdown|txt|pdf|png|jpe?g|gif|webp|svg|avif|heic|icns|ico|mp4|mov|webm|mkv|mp3|wav|m4a|flac|json|jsonl|js|mjs|cjs|ts|tsx|jsx|css|scss|sass|less|html?|xml|ya?ml|toml|ini|conf|lock|log|sh|zsh|bash|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sql|csv|tsv|xlsx?|docx?|pptx?|key|numbers|pages|zip|tar|gz|tgz|dmg|app|plist|epub|srt|vtt|command)(?=$|[.\s'"`)\],:;。，）】、？！；：])/gu;
 // 文件夹：干净扁平的单色实心文件夹（强色 + 简洁几何，不做作）
 function gFolder(size, color) {
   return `<svg class="rich-glyph" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">`
@@ -2213,7 +2214,7 @@ const term = {
     if (!s || !name) return '';
     const buf = s.xterm.buffer.active;
     const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp('(?:~|/)(?:[^\\s\'"`()]*/)?' + esc + '(?=$|[\\s\'"`)\\],:;。，）】])', 'gu');
+    const re = new RegExp('(?:~|/)(?:[^\\s\'"`()]*/)?' + esc + '(?=$|[\\s\'"`)\\],:;。，）】、？！；：])', 'gu');
     const hits = [];
     let row = Math.min(fromRow == null ? buf.length - 1 : fromRow, buf.length - 1);
     let budget = 2000;
@@ -2366,7 +2367,8 @@ const term = {
           };
           let m;
           // 0. URL：直接系统浏览器打开（Electron 的 windowOpenHandler 会转 shell.openExternal）
-          const reU = /\bhttps?:\/\/[^\s'"`<>）（【】「」]+/g;
+          // 全角标点不可能裸出现在合法 URL 里（必须百分号编码），排除掉防止「url、后续散文」粘连
+          const reU = /\bhttps?:\/\/[^\s'"`<>）（【】「」，。、？！：；]+/g;
           while ((m = reU.exec(t)) !== null) {
             const url = m[0].replace(/[)\],.:;。，？！?!）】>]+$/, '');
             push(m.index, m.index + url.length, url, '', () => window.open(url));
