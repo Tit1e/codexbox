@@ -1328,8 +1328,15 @@ async function enterEditMode(e) {
 // 离开（切文件/跳目录/关预览）由 guardDirty 的 autosaveFlush 把残余改动写掉，不弹确认框。
 async function mdEditor(e, data, mode = 'rich') {
   const body = $('#preview-body');
+  // 拖图进编辑器时，浏览器常把卡片/预览缩略图的内部 URL（localhost/api-thumb、/fs 镜像）写进文档，
+  // 而那是低清缩略图（w=160）链接，发出去就裂。这里统一还原成真实文件路径；外链 https/data: 不动。
+  const cleanImgUrls = (md) => String(md)
+    .replace(/(?:https?:\/\/localhost:\d+)?\/api\/(?:thumb|raw)\?path=([^)\s"'&]+)(?:&[^)\s"']*)?/g,
+      (m, p) => { try { return decodeURIComponent(p); } catch { return m; } })
+    .replace(/(?:https?:\/\/localhost:\d+)?\/fs\/([^)\s"']+)/g,
+      (m, s) => { try { return '/' + s.split('?')[0].split('/').filter(Boolean).map(decodeURIComponent).join('/'); } catch { return m; } });
   let baseMtime = data.mtime;
-  let content0 = data.content || ''; // canonical：磁盘原始 markdown，唯一事实源；编辑器只从它初始化
+  let content0 = cleanImgUrls(data.content || ''); // canonical：磁盘原始 markdown（顺手还原历史遗留的内部预览 URL）；唯一事实源，编辑器只从它初始化
   let getValue = null, baseline = '';
   let timer = null, paused = false;
   let forceCode = false; // 该文件 Milkdown 往返有损 → 锁源码模式，富文本按钮灰显（用户选「无损才用富文本」）
@@ -1348,7 +1355,7 @@ async function mdEditor(e, data, mode = 'rich') {
   };
   const doSave = async (force) => {
     if (!getValue || paused) return;
-    const content = getValue();
+    const content = cleanImgUrls(getValue()); // 落盘前把新拖入图片的内部预览 URL 还原成真实路径
     if (content === baseline) return;
     setStatus('保存中…');
     const r = await apiPost('/api/write', { path: e.path, content, expectedMtime: force ? 0 : baseMtime });
@@ -1380,7 +1387,7 @@ async function mdEditor(e, data, mode = 'rich') {
     if (modeBtn && !dis) modeBtn.onclick = async () => {
       await flush();
       const cur = getValue ? getValue() : content0;
-      if (cur !== baseline) content0 = cur; // 只有真编辑过才采纳编辑器的值；没改就保留磁盘原文，源码视图不被 Milkdown 规范化
+      if (cur !== baseline) content0 = cleanImgUrls(cur); // 只有真编辑过才采纳编辑器的值（顺手还原拖入图片的内部 URL）；没改就保留磁盘原文，不被 Milkdown 规范化
       render(m === 'rich' ? 'code' : 'rich');
     };
     const host = $('#ed-host');
