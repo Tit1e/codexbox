@@ -29,6 +29,15 @@ async function run(cmd, stdinText, cwd, timeoutMs = 180000, onLine = null) {
   });
 }
 
+// 从一个 usage 对象估出「上下文有多重」的 token 数：优先 claude 的输入侧（含缓存读写=被重放的全部输入），
+// 退回 codex/openai 风格的 total/prompt。用来驱动自动压缩闸门，不需要绝对精确，量级对就行。
+function usageTokens(u) {
+  if (!u || typeof u !== 'object') return 0;
+  const claudeInput = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+  if (claudeInput) return claudeInput;
+  return u.total_tokens || u.prompt_tokens || 0;
+}
+
 // 把一次工具调用翻译成一句手机能看懂的「正在干啥」。null 表示这步不值得播报。
 function progressNote(name, input) {
   const i = input || {};
@@ -65,30 +74,30 @@ async function runClaude(text, cwd, sessionId, persona, onProgress) {
   const sys = persona ? `--append-system-prompt ${shq(persona)}` : '';
   const fmt = onProgress ? '--output-format stream-json --verbose' : '--output-format json';
   const cmd = `claude -p ${fmt} --dangerously-skip-permissions ${sys} ${flag}`;
-  let result = '', outSid = sid;
-  // 流式：逐行解析 JSONL，工具调用 → 播报，result 事件 → 拿最终文本与 session
+  let result = '', outSid = sid, tokens = 0, cost = 0;
+  // 流式：逐行解析 JSONL，工具调用 → 播报，result 事件 → 拿最终文本 / session / 用量
   const onLine = onProgress ? (line) => {
     const t = line.trim(); if (!t || t[0] !== '{') return;
     let o; try { o = JSON.parse(t); } catch { return; }
-    if (o.type === 'result') { result = o.result || result; outSid = o.session_id || outSid; return; }
+    if (o.type === 'result') { result = o.result || result; outSid = o.session_id || outSid; if (o.usage) tokens = usageTokens(o.usage) || tokens; if (o.total_cost_usd != null) cost = o.total_cost_usd; return; }
     if (o.type === 'assistant' && o.message && Array.isArray(o.message.content)) {
       for (const b of o.message.content) { if (b.type === 'tool_use') { const p = progressNote(b.name, b.input); if (p) onProgress(p); } }
     }
   } : null;
   const r = await run(cmd, text, cwd, 600000, onLine);
   if (!onProgress) {
-    try { const j = JSON.parse((r.out || '').trim()); result = j.result || j.text || ''; outSid = j.session_id || sid; }
+    try { const j = JSON.parse((r.out || '').trim()); result = j.result || j.text || ''; outSid = j.session_id || sid; if (j.usage) tokens = usageTokens(j.usage); if (j.total_cost_usd != null) cost = j.total_cost_usd; }
     catch { result = (r.out || '').trim(); } // 非 JSON 兜底
   } else if (!result) {
     // 流式没抓到 result 事件 → 兜底再扫一遍全部输出
-    for (const line of (r.out || '').split('\n')) { const t = line.trim(); if (t[0] !== '{') continue; let o; try { o = JSON.parse(t); } catch { continue; } if (o.type === 'result') { result = o.result || result; outSid = o.session_id || outSid; } }
+    for (const line of (r.out || '').split('\n')) { const t = line.trim(); if (t[0] !== '{') continue; let o; try { o = JSON.parse(t); } catch { continue; } if (o.type === 'result') { result = o.result || result; outSid = o.session_id || outSid; if (o.usage) tokens = usageTokens(o.usage) || tokens; if (o.total_cost_usd != null) cost = o.total_cost_usd; } }
   }
   // resume 的会话失效（旧 id / 过期）→ 自动起新会话重试一次，别把报错甩给用户
   if (sessionId && /No conversation found|session.*not found/i.test(result + ' ' + (r.err || ''))) {
     return runClaude(text, cwd, null, persona, onProgress);
   }
   if (!result && !r.ok) result = `（claude 出错）${(r.err || '').trim().slice(-300)}`;
-  return { text: result || '（没有返回内容）', sessionId: outSid };
+  return { text: result || '（没有返回内容）', sessionId: outSid, tokens, cost };
 }
 
 // codex 无头：首轮 `codex exec` 建会话并从 thread.started 抓 thread_id；之后 `codex exec resume <id> -` 续上下文（codex 0.139+）。
@@ -106,14 +115,16 @@ async function runCodex(text, cwd, persona, sessionId, onProgress) {
     if (/command|exec|tool|function|patch|file/.test(ty)) { const n = codexNote(item); if (n) onProgress(n); }
   } : null;
   const r = await run(cmd, stdin, cwd, 600000, onLine);
-  // --json 输出 JSONL 事件：抓 thread_id + 最终 assistant 文本（后到的覆盖前面）
-  let result = '', outSid = sessionId || '';
+  // --json 输出 JSONL 事件：抓 thread_id + 最终 assistant 文本（后到的覆盖前面）+ 用量（取最大，事件多为累计）
+  let result = '', outSid = sessionId || '', tokens = 0;
   for (const line of (r.out || '').split('\n')) {
     const t = line.trim(); if (!t || t[0] !== '{') continue;
     let o; try { o = JSON.parse(t); } catch { continue; }
     if (o.type === 'thread.started' && o.thread_id) outSid = o.thread_id;
     const item = o.item || o.msg || o;
     const ty = item.type || o.type || '';
+    const u = o.usage || item.usage || (/token|usage/i.test(ty) ? (item || o) : null);
+    if (u) { const tk = usageTokens(u); if (tk > tokens) tokens = tk; } // codex 用量事件结构不稳，尽力抓、取最大
     if (/agent_message|assistant|message\.completed|item\.completed/i.test(ty)) {
       const txt = item.text || item.message || (item.content && item.content.text) || '';
       if (txt && typeof txt === 'string') result = txt;
@@ -128,7 +139,7 @@ async function runCodex(text, cwd, persona, sessionId, onProgress) {
     result = (parts[parts.length - 1] || '').replace(/^\s*user[\s\S]*?\n/i, '').trim();
   }
   if (!result && !r.ok) result = `（codex 出错）${stripAnsi(r.err || r.out || '').trim().slice(-300)}`;
-  return { text: result || '（没有返回内容）', sessionId: outSid };
+  return { text: result || '（没有返回内容）', sessionId: outSid, tokens, cost: 0 };
 }
 
 function stripAnsi(s) { return s.replace(/\[[0-9;]*m/g, ''); }

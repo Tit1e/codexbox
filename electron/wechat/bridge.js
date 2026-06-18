@@ -22,6 +22,16 @@ const now = () => { const d = new Date(); return `${String(d.getHours()).padStar
 // 微信场景默认人格：claude/codex 桌面端很啰嗦，手机上刷屏难受——注入这条让回复适配手机。可自定义。
 const WX_PERSONA_DEFAULT = '你正通过微信被花叔遥控，回复会显示在手机微信里。请：用中文、简洁直接、适合手机阅读；先给结论，细节按需再展开；除非花叔明确要求，别贴大段代码或长列表；做了改动用一两句话说清改了什么。';
 
+// 上下文预算：单轮被重放的输入 token 超过这条线，回合结束后自动压缩（flush 记忆 + 摘要续场 + 换新 session）。
+// claude 默认 200k 窗口，留 40% 垫给当轮输出与压缩自身；常用 1M 版本可调高。
+const CTX_BUDGET = 120000;
+// 压缩归档时让 agent 先 flush 记忆、再吐一段进度摘要的指令（不发给用户、只系统用）。
+const WX_COMPACT_PROMPT = [
+  '（系统指令，不是花叔发的，别当成对话）这段对话即将被压缩归档，请只做两件事：',
+  '1. 用 <memory> ops 把这段对话里值得长期记住的事实 / 偏好 / 项目进展写进记忆（没有就不写）。',
+  '2. 正文只输出一段 ≤150 字的「当前进度摘要」——在聊什么、已做到哪、下一步是什么，让接手的新会话能无缝接着干。除此之外什么都别说，别寒暄。',
+].join('\n');
+
 // 发文件协议：让 agent 能把本机文件/图片发到微信。在回复末尾追加标记，系统解析后发送、并从展示里剥掉。
 const WX_FILE_PROTOCOL = [
   '如果花叔要你把某个文件或图片发到微信，在回复的最末尾追加发送标记（每个文件一行，可多个）：',
@@ -158,7 +168,7 @@ const bridge = {
     const id = cid || this.latestCid();            // 不指定就取最近活跃会话，别再写死回 desktop
     this.activeCid = id;                            // 同步活跃会话，让后续推送的 emit 门控跟着当前展示的线走
     const c = this.conv(id);
-    return { ok: true, id: c.id, messages: c.messages };
+    return { ok: true, id: c.id, messages: c.messages, tokens: c.lastTokens || 0, budget: CTX_BUDGET };
   },
 
   // 本机其他终端实时状态：花名册（编号/目录/进程/忙闲）+ 最近输出尾巴，注入给 agent 感知
@@ -196,24 +206,60 @@ const bridge = {
   // onProgress：可选，driver 流式跑时把「正在干啥」回调出来，用于微信实时播报
   async runAgent(cid, text, onProgress) {
     const c = this.conv(cid);
-    // 系统提示 = 人格 + 注入记忆 + 记忆协议 + 发文件协议 + 控制终端协议 + 别的终端实时状态
+    // 压缩后留的「上次进度摘要」：换了新 session，把它播种进去让 agent 无缝接着干，用一次就清
+    let recap = '';
+    if (c.pendingRecap) { recap = `【上次对话进度摘要（上下文已压缩归档，接着干）】\n${c.pendingRecap}`; c.pendingRecap = ''; }
+    // 系统提示 = 人格 + 注入记忆 + 记忆协议 + 发文件协议 + 控制终端协议 + 别的终端实时状态 + 续场摘要
     const termCtx = await this.buildTermContext();
-    const sys = [this.persona, memory.inject(), memory.PROTOCOL, WX_FILE_PROTOCOL, WX_TERM_PROTOCOL, termCtx].filter(Boolean).join('\n\n');
-    let raw;
+    const sys = [this.persona, memory.inject(), memory.PROTOCOL, WX_FILE_PROTOCOL, WX_TERM_PROTOCOL, termCtx, recap].filter(Boolean).join('\n\n');
+    let raw, r;
     if (this.target === 'claude') {
-      const r = await driver.runClaude(text, this.cwd, c.claudeSession, sys, onProgress);
-      if (r.sessionId) { c.claudeSession = r.sessionId; this.persistConvos(); }
+      r = await driver.runClaude(text, this.cwd, c.claudeSession, sys, onProgress);
+      if (r.sessionId) { c.claudeSession = r.sessionId; }
       raw = r.text;
     } else {
-      const r = await driver.runCodex(text, this.cwd, sys, c.codexSession, onProgress);
-      if (r.sessionId) { c.codexSession = r.sessionId; this.persistConvos(); }
+      r = await driver.runCodex(text, this.cwd, sys, c.codexSession, onProgress);
+      if (r.sessionId) { c.codexSession = r.sessionId; }
       raw = r.text;
     }
+    // 记录上下文用量：driver 拿到 token 就用真值；codex 常拿不到 → 用消息字符数粗估（量级够驱动闸门/进度条）
+    let tk = r.tokens || 0;
+    if (!tk) { const chars = (c.messages || []).reduce((s, m) => s + (m.text ? m.text.length : 0), 0); tk = Math.round(chars / 3); }
+    c.lastTokens = tk;
+    if (r.cost) c.totalCost = (c.totalCost || 0) + r.cost;
+    this.persistConvos();
     // 抽出 <memory> ops 确定性落盘（去污染），把记忆块从展示里剥掉
     const { clean, ops } = memory.extractOps(raw);
     if (ops.length) { try { memory.applyOps(ops); } catch (e) { console.error('[wechat] memory apply', e); } }
     // 抽出 <term> ops 写进别的终端（fire-and-forget），把标记从展示里剥掉、附一句回执
     return this.runTermOps(clean || raw);
+  },
+
+  // 压缩归档前的静默一轮：在「当前满 session」上让 agent flush 记忆 + 吐一段进度摘要。
+  // 走 runAgent 复用 <memory> ops 落盘；返回的正文就是进度摘要（已剥掉记忆块）。失败返回空串，绝不阻塞重置。
+  async memoryFlush(cid) {
+    try { return (await this.runAgent(cid, WX_COMPACT_PROMPT) || '').trim(); }
+    catch (e) { console.error('[wechat] memoryFlush', e); return ''; }
+  },
+  // 整理对话（compact）：flush → 换新 session → 用进度摘要播种下一轮。auto=true 是闸门自动触发。
+  async compact(cid, auto) {
+    const c = this.conv(cid);
+    if (!c.claudeSession && !c.codexSession) return { ok: true, skipped: true }; // 没会话可压
+    const recap = await this.memoryFlush(cid);
+    c.claudeSession = ''; c.codexSession = '';
+    c.pendingRecap = recap || '';
+    c.lastTokens = 0;
+    this.push(cid, 'system', auto ? '🧹 已自动整理上下文（旧对话归档进记忆，继续聊不受影响）' : '🧹 已整理上下文，旧对话归档进记忆，可继续聊');
+    return { ok: true };
+  },
+  // 新对话（硬重置）：flush 一次保住记忆 → 清 session 与续场摘要 → 之后纯靠长期记忆续。
+  async newConversation(cid) {
+    const id = cid || this.activeCid;
+    const c = this.conv(id);
+    if (c.claudeSession || c.codexSession) { try { await this.memoryFlush(id); } catch { /* 失败也照样开新的 */ } }
+    c.claudeSession = ''; c.codexSession = ''; c.pendingRecap = ''; c.lastTokens = 0;
+    this.push(id, 'system', '—— 新对话 ——');
+    return { ok: true };
   },
 
   // 桌面输入框 → 本机大脑（不经微信，纯本地）
@@ -226,7 +272,13 @@ const bridge = {
     catch (e) { reply = `（出错）${String(e && e.message || e).slice(0, 300)}`; }
     reply = extractFiles(reply).clean || reply; // 桌面无收件人，只剥掉发文件标记，不真发
     this.push(cid, 'assistant', reply);
+    await this.autoCompactIfHeavy(cid);
     return { ok: true, messages: this.conv(cid).messages };
+  },
+  // 上下文过重 → 回合结束后静默压缩（放在回复之后，绝不打断当轮回答）。失败不影响主流程。
+  async autoCompactIfHeavy(cid) {
+    if ((this.conv(cid).lastTokens || 0) < CTX_BUDGET) return;
+    try { await this.compact(cid, true); } catch (e) { console.error('[wechat] autoCompact', e); }
   },
 
   // ---------- iLink（手机微信）----------
@@ -387,6 +439,7 @@ const bridge = {
       } catch (e) { await ilink.sendText(this.account, from, `（发文件失败：${path.basename(fp)} — ${String(e && e.message || e).slice(0, 150)}）`, msg.context_token).catch(() => {}); }
     }
     this.push(from, 'assistant', reply + (sent.length ? `\n📎 已发送：${sent.join('、')}` : ''));
+    await this.autoCompactIfHeavy(from);
   },
   disconnect() {
     if (this.pollAbort) { try { this.pollAbort.abort(); } catch { /* */ } this.pollAbort = null; }

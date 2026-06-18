@@ -76,7 +76,9 @@ contextBridge.exposeInMainWorld('fanboxWechat', {
   setCwd: (dir) => ipcRenderer.invoke('wechat:setCwd', { dir }), // agent 工作目录跟随当前项目
   setPersona: (persona) => ipcRenderer.invoke('wechat:setPersona', { persona }), // 自定义微信 bot 人格
   send: (text) => ipcRenderer.invoke('wechat:send', { text }),   // 桌面输入框→本机大脑（不经微信）
-  conversation: (id) => ipcRenderer.invoke('wechat:conversation', { id }), // 取某会话消息（默认当前活跃）
+  conversation: (id) => ipcRenderer.invoke('wechat:conversation', { id }), // 取某会话消息（默认当前活跃）+ token 用量
+  newConversation: (id) => ipcRenderer.invoke('wechat:newConversation', { id }), // 新对话（硬重置 session，靠记忆续）
+  compact: (id) => ipcRenderer.invoke('wechat:compact', { id }),         // 整理对话（flush 记忆 + 摘要续场 + 换 session）
   disconnect: () => ipcRenderer.invoke('wechat:disconnect'),
   cancel: () => ipcRenderer.invoke('wechat:cancel'),
   check: () => ipcRenderer.invoke('wechat:check'),                     // 主动探活 → { state: connected/expired/unreachable/disconnected }

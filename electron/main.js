@@ -771,6 +771,8 @@ ipcMain.handle('wechat:setCwd', (e, { dir } = {}) => { ensureWechat(); return we
 ipcMain.handle('wechat:setPersona', (e, { persona } = {}) => { ensureWechat(); return wechatBridge.setPersona(persona); });
 ipcMain.handle('wechat:send', async (e, { text } = {}) => { ensureWechat(); return wechatBridge.sendDesktop(text); });
 ipcMain.handle('wechat:conversation', (e, { id } = {}) => { ensureWechat(); return wechatBridge.conversation(id); });
+ipcMain.handle('wechat:newConversation', async (e, { id } = {}) => { ensureWechat(); return wechatBridge.newConversation(id); });
+ipcMain.handle('wechat:compact', async (e, { id } = {}) => { ensureWechat(); return wechatBridge.compact(id, false); });
 ipcMain.handle('wechat:login', async () => { ensureWechat(); return wechatBridge.login(); });
 ipcMain.handle('wechat:disconnect', async () => { ensureWechat(); return wechatBridge.disconnect(); });
 ipcMain.handle('wechat:cancel', () => ({ ok: true }));

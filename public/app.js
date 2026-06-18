@@ -2170,6 +2170,13 @@ const wechatView = {
           <span class="wx-spacer"></span>
           <button class="wx-reconnect-btn" id="wx-reconnect-btn">重新连接</button>
         </div>
+        <div class="wx-ctx" id="wx-ctx">
+          <div class="wx-meter" id="wx-meter" title="当前对话上下文用量：越满越贵越慢，满了会自动整理"><span class="wx-meter-fill" id="wx-meter-fill"></span></div>
+          <span class="wx-meter-txt" id="wx-meter-txt"></span>
+          <span class="wx-spacer"></span>
+          <button class="wx-ctx-btn" id="wx-compact" title="整理对话：把要点存进记忆，换个轻量上下文接着聊">整理</button>
+          <button class="wx-ctx-btn" id="wx-new" title="新对话：归档当前，开个全新的（靠长期记忆续）">新对话</button>
+        </div>
         <div class="wx-chat" id="wx-chat"></div>
         <div class="wx-scan hidden" id="wx-scan"></div>
         <div class="wx-viewonly">仅查看手机微信与本机大脑的对话记录，回复请在手机微信进行</div>
@@ -2177,6 +2184,8 @@ const wechatView = {
     e.querySelector('#wx-close').onclick = () => this.close();
     e.querySelector('#wx-brain').onclick = (ev) => { ev.stopPropagation(); this.toggleMenu(); };
     e.querySelector('#wx-awake').onclick = () => this.toggleAwake();
+    e.querySelector('#wx-compact').onclick = (ev) => this.runCtxAction(ev.currentTarget, '整理中…', () => window.fanboxWechat.compact(), '已整理上下文');
+    e.querySelector('#wx-new').onclick = (ev) => this.runCtxAction(ev.currentTarget, '处理中…', () => window.fanboxWechat.newConversation(), '已开启新对话');
     e.querySelector('#wx-reconnect-btn').onclick = () => this.connectPhone();
     this.syncAwake();
     this.onDoc = (ev) => { if (this.menuOpen && !ev.target.closest('#wx-menu') && !ev.target.closest('#wx-brain')) this.closeMenu(); };
@@ -2291,6 +2300,7 @@ const wechatView = {
     const e = this.el(); const chat = e && e.querySelector('#wx-chat'); if (!chat) return;
     const r = await window.fanboxWechat.conversation().catch(() => ({ messages: [] }));
     const msgs = r.messages || [];
+    this.updateMeter(r.tokens, r.budget);
     if (!msgs.length) {
       chat.innerHTML = `<div class="wx-empty">还没有对话。<br>点右上「连到 ${escapeHtml(this.label(this.target))} ▾ → 连接手机微信」，<br>用手机微信遥控本机的 <b>${escapeHtml(this.label(this.target))}</b>，对话记录会显示在这里。</div>`;
       return;
@@ -2298,7 +2308,24 @@ const wechatView = {
     chat.innerHTML = msgs.map((m) => this.bubble(m)).join('');
     chat.scrollTop = chat.scrollHeight;
   },
+  // 上下文用量进度条：满了越贵越慢，≥80% 转红提醒（会自动整理）
+  updateMeter(tokens, budget) {
+    const e = this.el(); if (!e) return;
+    tokens = tokens || 0; budget = budget || 120000;
+    const pct = Math.min(100, Math.round((tokens / budget) * 100));
+    const fill = e.querySelector('#wx-meter-fill'); const txt = e.querySelector('#wx-meter-txt');
+    if (fill) { fill.style.width = pct + '%'; fill.classList.toggle('hot', pct >= 80); }
+    if (txt) txt.textContent = tokens ? `${Math.round(tokens / 1000)}k / ${Math.round(budget / 1000)}k` : '';
+  },
+  // 整理/新对话共用：禁用按钮 + 改文案跑（flush 要一次模型调用，几秒），完事 toast + 刷新
+  async runCtxAction(btn, busyText, fn, okText) {
+    if (btn.disabled) return;
+    const old = btn.textContent; btn.disabled = true; btn.textContent = busyText;
+    try { await fn(); toast(okText); } catch { toast('操作失败', true); }
+    btn.disabled = false; btn.textContent = old; this.loadChat();
+  },
   bubble(m) {
+    if (m.role === 'system') return `<div class="wx-sys">${escapeHtml(m.text)}</div>`; // 分隔线/系统提示居中
     const me = m.role === 'user';
     const av = me ? '花' : (this.target === 'claude' ? 'C' : 'CX');
     // bot 回复渲染 markdown（手机大脑常回 **加粗**/列表/`代码`）；user 保持纯文本转义
