@@ -2558,7 +2558,8 @@ function bindEvents() {
     if (imgEditState && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); ieUndo(imgEditState); return; }
     // 全屏预览下 Esc 先退出全屏（即便焦点在 md 编辑器里），不直接关掉预览
     if (e.key === 'Escape' && previewMax) { e.preventDefault(); setPreviewMax(false); return; }
-    const inInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
+    const inTerm = document.activeElement?.closest('.xterm');
+    const inInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable || inTerm;
     // 输入框里按 Esc 先退出输入，别越级把预览关掉
     if (e.key === 'Escape' && inInput) { document.activeElement.blur(); return; }
     if (e.key === 'Escape' && !$('#preview').classList.contains('hidden')) { closePreview(); return; }
@@ -3200,6 +3201,10 @@ const term = {
     });
     const fit = FitCtor ? new FitCtor() : null;
     if (fit) xterm.loadAddon(fit);
+    // 剪贴板支持：右键菜单 + 复制粘贴
+    if (!window.__noClipboard && window.ClipboardAddon) {
+      try { const C = window.ClipboardAddon.ClipboardAddon || window.ClipboardAddon; xterm.loadAddon(new C()); } catch { /* */ }
+    }
     // CJK 宽字符正确宽度：没有它，中文目录名会让 zsh 提示符重绘错列（乱码）
     if (!window.__noUnicode11 && window.Unicode11Addon) {
       try { const U = window.Unicode11Addon.Unicode11Addon || window.Unicode11Addon; xterm.loadAddon(new U()); xterm.unicode.activeVersion = '11'; } catch { /* */ }
@@ -3245,6 +3250,67 @@ const term = {
     });
     xterm.onResize(({ cols, rows }) => { sess.lastInput = Date.now(); window.fanboxPty.resize(id, cols, rows); }); // resize 引发的 TUI 重绘不算 agent 干活
     window.fanboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
+
+    // 自定义键盘处理：⌘C 有选中文本则复制，否则发 SIGINT；⌘V 粘贴；⌘+/⌘-/⌘0 字体缩放
+    xterm.attachCustomKeyEventHandler((e) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && (e.key === 'c' || e.key === 'C')) {
+        if (xterm.hasSelection()) {
+          // 有选中 → 复制到剪贴板，不发给 PTY
+          try {
+            const sel = xterm.getSelection();
+            navigator.clipboard.writeText(sel);
+            xterm.clearSelection();
+          } catch { /* 剪贴板不可用时走菜单兜底 */ }
+          e.preventDefault();
+          return false;
+        }
+        // 无选中 → 正常发送 SIGINT (⌘C 本来的行为)
+        return true;
+      }
+      if (cmd && (e.key === 'v' || e.key === 'V')) {
+        // ⌘V 粘贴
+        e.preventDefault();
+        navigator.clipboard.readText().then(text => {
+          if (text) xterm.paste(text);
+        }).catch(() => { /* 无权限时走Electron菜单兜底 */ });
+        return false;
+      }
+      if (cmd && (e.key === '=' || e.key === '+' || e.key === '0')) {
+        e.preventDefault();
+        const delta = e.key === '0' ? 0 : (e.key === '=' || e.key === '+' ? 1 : -1);
+        term.adjustFont(sess, delta);
+        return false;
+      }
+      if (cmd && e.key === '-') {
+        e.preventDefault();
+        term.adjustFont(sess, -1);
+        return false;
+      }
+      return true;
+    });
+
+    // 右键菜单：复制/粘贴
+    host.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const hasSel = xterm.hasSelection();
+      const items = [];
+      if (hasSel) items.push({ label: '复制', fn: () => {
+        try { navigator.clipboard.writeText(xterm.getSelection()); xterm.clearSelection(); } catch {}
+      }});
+      items.push({ label: '粘贴', fn: async () => {
+        try { const text = await navigator.clipboard.readText(); if (text) xterm.paste(text); } catch {}
+      }});
+      popupMenu(e, items);
+    });
+
+    // 选中即复制（iTerm2 默认行为）
+    xterm.onSelectionChange(() => {
+      if (xterm.hasSelection()) {
+        try { navigator.clipboard.writeText(xterm.getSelection()); } catch { /* 静默失败，用户仍可右键/菜单复制 */ }
+      }
+    });
+
     // 识别终端输出里的文件路径 → hover 高亮 + 点击在翻箱打开
     // 三层匹配：引号串（边界最可靠，文件名可含空格）> 斜杠路径 > 带已知扩展名的裸文件名；
     // 长路径折行用逐 cell 拼回逻辑行（CJK 宽字符占两列，下标→坐标必须按 cell 算才不偏移）
@@ -3409,6 +3475,18 @@ const term = {
     const s = this.sessions.find((x) => x.id === this.active);
     if (!s || !s.fit) return;
     requestAnimationFrame(() => { try { s.fit.fit(); } catch { /* */ } });
+  },
+  // 字体缩放：⌘+/⌘- 调整字号，⌘0 重置为默认 13px
+  adjustFont(sess, delta) {
+    if (!sess._fontSize) sess._fontSize = 13;
+    if (delta === 0) sess._fontSize = 13;
+    else sess._fontSize = Math.max(10, Math.min(24, sess._fontSize + delta));
+    const xterm = sess.xterm;
+    // xterm 没有直接改 fontSize 的 API，通过 options 更新
+    xterm.options.fontSize = sess._fontSize;
+    // 字号变了要重新 fit，避免内容裁切
+    requestAnimationFrame(() => { try { sess.fit.fit(); } catch { /* */ } });
+    // 通知 PTY 重新获取尺寸（fit 会触发 onResize，已经做了）
   },
   // agent 态势感知：终端有输出→busy；静默 >2.5s→idle；进程退出→dead。
   // 非活动标签产生输出标记未读小点；长任务（busy>4s）完成且窗口失焦/非当前标签时发系统通知。
@@ -3618,7 +3696,7 @@ const skillsView = {
     state.skillsMode = true; state.recentMode = false; state.cursor = -1;
     renderBreadcrumb();
     $('#file-area').innerHTML = '<div class="cmdk-loading">扫描本机 skills…</div>';
-    try { this.data = await api('/api/skills'); } catch { $('#file-area').innerHTML = '<div class="nav-empty">扫描失败</div>'; return; }
+    try { this.data = await apiPost('/api/skills/refresh', { cwd: state.cwd }); } catch { $('#file-area').innerHTML = '<div class="nav-empty">扫描失败</div>'; return; }
     this.render();
   },
   async reload() {
