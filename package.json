@@ -1,6 +1,6 @@
 {
   "name": "fanbox",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "FanBox — the cockpit for coding agents. Command Claude Code or Codex, watch every file and line they change, and take over anytime.",
   "bin": {
     "fanbox": "server.js"
@@ -15,9 +15,9 @@
     "build:hljs": "esbuild src-vendor/hljs-entry.js --bundle --format=iife --minify --outfile=public/vendor/hljs/highlight.js && cp node_modules/marked/marked.min.js public/vendor/marked/marked.min.js && cp node_modules/highlight.js/styles/github-dark.min.css node_modules/highlight.js/styles/github.min.css public/vendor/hljs/styles/",
     "check:vendor-patch": "grep -q '20===e.keyCode||229===e.keyCode' public/vendor/xterm/xterm.js",
     "predist": "npm run check:vendor-patch",
-    "dist": "electron-builder --mac --arm64",
+    "dist": "APPLE_KEYCHAIN_PROFILE=fanbox-notary electron-builder --mac --arm64",
     "predist:x64": "npm run check:vendor-patch",
-    "dist:x64": "PTY_ARCH=x64 npm run rebuild:pty && electron-builder --mac --x64 && PTY_ARCH=arm64 npm run rebuild:pty"
+    "dist:x64": "PTY_ARCH=x64 npm run rebuild:pty && APPLE_KEYCHAIN_PROFILE=fanbox-notary electron-builder --mac --x64 && PTY_ARCH=arm64 npm run rebuild:pty"
   },
   "build": {
     "appId": "com.huashu.fanbox",
@@ -35,7 +35,8 @@
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "identity": "Apple Development: chen yunfei (FG7WYU86RP)",
+      "identity": "chen yunfei (KQQ39VZPW6)",
+      "notarize": true,
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
