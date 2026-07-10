@@ -1,10 +1,10 @@
-'use strict';
 /**
- * FanBox — Electron 主进程
- *
- * 复用零依赖后端 server.js（文件能力），叠加 node-pty 内嵌终端，
- * 让 TUI coding agent（Claude Code / Codex / Aider…）在界面里直接跑起来。
+ * [INPUT]: 依赖 Electron 的窗口/菜单/IPC/系统能力、../server.js 本地服务、node-pty 终端和 electron/wechat 子模块
+ * [OUTPUT]: 对外提供 FanBox 桌面主进程、PTY 与文件/剪贴板/更新/微信 IPC、原生菜单和窗口生命周期
+ * [POS]: electron 模块的主进程编排器，与 preload.js 协作连接渲染层、本地服务和操作系统
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
+'use strict';
 const { app, BrowserWindow, ipcMain, shell, nativeImage, Menu, clipboard, dialog, net, session } = require('electron');
 const path = require('path');
 const os = require('os');
@@ -408,7 +408,8 @@ function buildMenu() {
       { role: 'selectAll', label: M('全选', 'Select All') },
     ] },
     { label: M('视图', 'View'), submenu: [
-      { role: 'reload', label: M('重新加载', 'Reload') }, { role: 'toggleDevTools', label: M('开发者工具', 'Developer Tools') },
+      ...(!isMac ? [{ role: 'reload', label: M('重新加载', 'Reload') }] : []),
+      { role: 'toggleDevTools', label: M('开发者工具', 'Developer Tools') },
       { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
       { type: 'separator' }, { role: 'togglefullscreen', label: M('全屏', 'Full Screen') },
       ...(isMac ? [{ type: 'separator' }, {

@@ -1,4 +1,9 @@
-/* FanBox 前端 */
+/**
+ * [INPUT]: 依赖 index.html DOM、i18n.js、服务端 HTTP API、xterm/Monaco/Milkdown 浏览器全局对象和 Electron preload 桥接
+ * [OUTPUT]: 对外提供 FanBox 文件管理、预览编辑、内嵌终端、agent、微信面板和全局交互
+ * [POS]: public 模块的渲染层主入口，集中编排页面状态、视图和桌面能力
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 'use strict';
 
 const $ = (s) => document.querySelector(s);
@@ -3441,10 +3446,11 @@ const term = {
     xterm.onResize(({ cols, rows }) => { sess.lastInput = Date.now(); window.fanboxPty.resize(id, cols, rows); }); // resize 引发的 TUI 重绘不算 agent 干活
     window.fanboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
 
-    // 自定义键盘处理：⌘C 有选中文本则复制，否则发 SIGINT；⌘V 粘贴；⌘+/⌘-/⌘0 字体缩放
+    // 自定义键盘处理：macOS 用 ⌘，其它平台用 Ctrl；纯 Ctrl 按键在 macOS 交给终端程序
     xterm.attachCustomKeyEventHandler((e) => {
-      const cmd = e.metaKey || e.ctrlKey;
-      if (cmd && (e.key === 'c' || e.key === 'C')) {
+      if (e.type !== 'keydown') return true;
+      const primaryShortcut = window.fanboxEnv?.platform === 'darwin' ? e.metaKey : e.ctrlKey;
+      if (primaryShortcut && (e.key === 'c' || e.key === 'C')) {
         if (xterm.hasSelection()) {
           // 有选中 → 复制到剪贴板，不发给 PTY
           try {
@@ -3455,24 +3461,24 @@ const term = {
           e.preventDefault();
           return false;
         }
-        // 无选中 → 正常发送 SIGINT (⌘C 本来的行为)
+        // 无选中 → 交给 xterm / 原生菜单按平台处理；macOS 的 Ctrl+C 会在上面直接透传
         return true;
       }
-      if (cmd && (e.key === 'v' || e.key === 'V')) {
-        // ⌘V 粘贴
+      if (primaryShortcut && (e.key === 'v' || e.key === 'V')) {
+        // macOS 的 ⌘V / 其它平台的 Ctrl+V 粘贴文本
         e.preventDefault();
         navigator.clipboard.readText().then(text => {
           if (text) xterm.paste(text);
         }).catch(() => { /* 无权限时走Electron菜单兜底 */ });
         return false;
       }
-      if (cmd && (e.key === '=' || e.key === '+' || e.key === '0')) {
+      if (primaryShortcut && (e.key === '=' || e.key === '+' || e.key === '0')) {
         e.preventDefault();
         const delta = e.key === '0' ? 0 : (e.key === '=' || e.key === '+' ? 1 : -1);
         term.adjustFont(sess, delta);
         return false;
       }
-      if (cmd && e.key === '-') {
+      if (primaryShortcut && e.key === '-') {
         e.preventDefault();
         term.adjustFont(sess, -1);
         return false;
