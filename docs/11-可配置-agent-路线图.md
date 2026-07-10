@@ -1,57 +1,56 @@
+<!--
+[INPUT]: 依赖社区 issue #38、当前 enabledAgents/agents 配置和 Claude/Codex 会话格式
+[OUTPUT]: 对外提供可配置 Agent 已落地范围与会话适配器后续路线
+[POS]: docs 的 Agent 扩展路线图，区分通用启动配置与专属会话能力
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+-->
 # 可配置 Agent 路线图（#38 建议一）
 
-> 来源：社区 issue [#38](https://github.com/alchaincyf/fanbox/issues/38) 建议一。目标是把现在硬编码的 Claude Code / Codex 两个 agent，改成用户能在配置里自己声明任意 CLI agent（Aider、pi、SWE-agent 等）。
+> 来源：社区 issue [#38](https://github.com/alchaincyf/fanbox/issues/38) 建议一。
+> 状态：通用启动入口已在 v2.4.0 落地；会话发现、续会话与整理引擎仍需要逐个 Agent 适配。
 
-## 现状
+## 当前边界
 
-FanBox 把「agent」这个概念硬编码成了 claude 和 codex 两套，散落在多处：
+FanBox 已经能从 `~/.fanbox/config.json` 读取启用项和自定义 Agent，并在终端顶栏动态生成启动入口。仍然与具体 Agent 耦合的部分是：
 
-- 终端顶栏的启动按钮（写死两个）
-- Agent 项目发现：扫 `~/.claude/projects` 和 `~/.codex/sessions` 出历史会话
-- 续会话：`claude --resume` / `codex resume`
-- AI 整理引擎：可选 claude / codex
-- Skills 扫描：claude skills 体系
-- 微信 ClawBot 大脑：`driver.js` 里 `runClaude` / `runCodex` 两条独立链路
+- Agent 项目发现：分别扫描 Claude Code 与 Codex 的会话目录。
+- 续会话：不同 CLI 有不同的会话标识和恢复命令。
+- AI 整理引擎：当前只适配已验证的本地 CLI。
+- Skills 扫描：不同 Agent 的 skill 目录和格式并不统一。
 
-## 目标配置形态
+## 配置形态
 
-沿用 issue 里提的 `agents` 数组（放 settings.json）：
+内置 Agent 由应用提供稳定的 id、名称、命令和安装提示；高级用户可以在 `~/.fanbox/config.json` 的 `agents` 数组中覆盖同 id 项或追加新入口。启动配置只描述“如何启动”，不假装能统一所有会话格式。
 
 ```json
 {
+  "enabledAgents": ["claude", "codex", "pi"],
   "agents": [
-    { "id": "claude", "label": "Claude Code", "cmd": "claude --dangerously-skip-permissions", "sessionDir": "~/.claude/projects", "resumeCmd": "claude --dangerously-skip-permissions --resume" },
-    { "id": "codex",  "label": "Codex",        "cmd": "codex",                                  "sessionDir": "~/.codex/sessions",  "resumeCmd": "codex resume" },
-    { "id": "pi",     "label": "Pi AI",        "cmd": "pi",                                     "sessionDir": "~/.pi/agent/sessions", "resumeCmd": "pi -r" }
+    { "id": "pi", "label": "Pi AI", "cmd": "pi" },
+    { "id": "aider", "label": "Aider", "cmd": "aider" }
   ]
 }
 ```
 
-## 难点：纯配置覆盖不了「会话发现 / 续会话」
+## 难点：纯配置覆盖不了会话发现与续会话
 
-`cmd` / `label` 这种是纯字符串，配置即可。但**会话发现和续会话**没法只靠配置：
+`cmd` 和 `label` 是普通字符串，配置即可。但会话能力不能靠猜：
 
-- claude 的会话落盘是 `~/.claude/projects/<编码后的cwd>/<uuid>.jsonl`，第一句话当标题、记录改过的文件、触发的 skill。
-- codex 的会话落盘格式、thread_id 抓取、resume 调用方式都和 claude 不同。
-- 第三方 agent（Aider 等）可能根本没有可读的会话历史。
+- Claude Code 会话位于 `~/.claude/projects/<编码后的cwd>/<uuid>.jsonl`，需要解析标题、改动文件和 session id。
+- Codex 的会话文件、thread id 与 resume 调用方式不同。
+- 第三方 Agent 可能没有公开且稳定的本地会话格式。
 
-所以要么放弃对自定义 agent 的「项目记忆 / 续会话」能力，要么为每个 agent 写一个**会话适配器**（怎么列会话、怎么取标题、怎么 resume）。
+因此，没有适配器的 Agent 只提供启动入口；项目记忆和续会话能力必须在验证格式后单独接入。
 
-## 分两步落地
+## 后续：会话适配器
 
-**第一步：纯配置能覆盖的（先发）**
-- settings.json 读 `agents` 数组，终端顶栏启动按钮按它动态生成
-- 自定义 `cmd` 启动、`label` 展示
-- AI 整理引擎下拉、微信大脑选择都吃这份列表
-- 没有会话适配器的 agent：只给「启动」，项目记忆/续会话区域显示「该 agent 暂不支持会话回溯」
+1. 定义最小接口：`listSessions(cwd)`、`sessionTitle(session)`、`resumeArgs(id)`、`changedFiles(session)`。
+2. 把现有 Claude Code 与 Codex 解析逻辑收敛为两个内置适配器。
+3. 缺少稳定会话格式的 Agent 明确显示“不支持会话回溯”，不做模糊猜测。
+4. 社区新增适配器时必须附真实样本和回归验证，避免上游格式变化静默损坏。
 
-**第二步：会话适配器（逐个补）**
-- 定义一个适配器接口：`listSessions(cwd)` / `sessionTitle(s)` / `resumeArgs(id)` / `changedFiles(s)`
-- 内置 claude / codex 两个适配器（把现有硬编码逻辑抽进去）
-- 留扩展位，社区可按格式补别的 agent 适配器
+## 不做
 
-## 不做 / 暂缓
-
-- 不做 GUI 配置面板，先靠手编 settings.json（克制，等真有人用再说）
-- 不替第三方 agent 猜会话格式，没有官方稳定落盘格式的就只给「启动」
-- 不保证近期排期，记录在此备查
+- 不为只提供桌面应用、没有终端 CLI 的产品伪造启动或会话能力。
+- 不把不同 Agent 的会话格式硬塞进一份臃肿配置。
+- 不在没有真实样本和稳定格式时承诺会话回溯。

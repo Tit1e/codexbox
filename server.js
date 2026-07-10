@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * FanBox — 本地文件指挥中心后端
- *
- * 纯 Node 内置模块，零依赖。只绑定 127.0.0.1，浏览器界面是唯一入口。
- * 这是一个本地个人工具：你的机器、你的文件，服务只在本机回环地址监听。
+ * [INPUT]: 依赖 Node.js 内置模块、port-config.js 端口配置、public 静态资源和 ~/.fanbox 本地配置
+ * [OUTPUT]: 对外提供文件 HTTP API、静态页面、隔离预览服务与 fanbox CLI 入口
+ * [POS]: 根模块的本地服务核心，被直接命令、npm start 和 Electron 主进程复用
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 'use strict';
 
@@ -15,9 +15,10 @@ const os = require('os');
 const crypto = require('crypto');
 const { exec, spawn, execFile } = require('child_process');
 const { URL } = require('url');
+const { resolvePort } = require('./port-config');
 
 const HOME = os.homedir();
-const PORT = Number(process.env.FANBOX_PORT) || 4567;
+const PORT = resolvePort({ dev: process.argv.includes('--dev') });
 const CONFIG_DIR = path.join(HOME, '.fanbox');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const THUMB_DIR = path.join(CONFIG_DIR, 'thumbs');

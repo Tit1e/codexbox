@@ -1,8 +1,10 @@
-'use strict';
 /**
- * 安全桥接：把终端 IPC 暴露给渲染进程（contextIsolation 下唯一的通道）。
- * 渲染进程通过 window.fanboxPty 控制 node-pty，window.fanboxEnv 判断是否在桌面 app 内。
+ * [INPUT]: 依赖 Electron 的 contextBridge、ipcRenderer 和 webUtils 受控系统能力
+ * [OUTPUT]: 对外提供 fanboxPty、fanboxRec、fanboxFs、fanboxClipboard、fanboxDrop、fanboxShot、fanboxUpdate、fanboxWin 与 fanboxEnv
+ * [POS]: electron 模块的安全桥接层，在 contextIsolation 下连接渲染进程与主进程 IPC
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
+'use strict';
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('fanboxPty', {
@@ -68,27 +70,4 @@ contextBridge.exposeInMainWorld('fanboxWin', {
 contextBridge.exposeInMainWorld('fanboxEnv', {
   isDesktopApp: true,
   platform: process.platform,
-});
-
-// 微信 ClawBot：不经 openclaw，直连 iLink + 本机 claude/codex；桌面输入框也能直接和本机大脑聊
-contextBridge.exposeInMainWorld('fanboxWechat', {
-  env: () => ipcRenderer.invoke('wechat:env'),            // { connected, account, target, targets, cwd, cwdName }
-  login: () => ipcRenderer.invoke('wechat:login'),        // 取二维码→轮询扫码（二维码/成功走事件）
-  setTarget: (target) => ipcRenderer.invoke('wechat:setTarget', { target }), // 切换大脑 codex / claude
-  setCwd: (dir) => ipcRenderer.invoke('wechat:setCwd', { dir }), // agent 工作目录跟随当前项目
-  setPersona: (persona) => ipcRenderer.invoke('wechat:setPersona', { persona }), // 自定义微信 bot 人格
-  send: (text) => ipcRenderer.invoke('wechat:send', { text }),   // 桌面输入框→本机大脑（不经微信）
-  conversation: (id) => ipcRenderer.invoke('wechat:conversation', { id }), // 取某会话消息（默认当前活跃）+ token 用量
-  newConversation: (id) => ipcRenderer.invoke('wechat:newConversation', { id }), // 新对话（硬重置 session，靠记忆续）
-  compact: (id) => ipcRenderer.invoke('wechat:compact', { id }),         // 整理对话（flush 记忆 + 摘要续场 + 换 session）
-  disconnect: () => ipcRenderer.invoke('wechat:disconnect'),
-  cancel: () => ipcRenderer.invoke('wechat:cancel'),
-  check: () => ipcRenderer.invoke('wechat:check'),                     // 主动探活 → { state: connected/expired/unreachable/disconnected }
-  setStayAwake: (on) => ipcRenderer.invoke('wechat:setStayAwake', { on }), // 「离开不待机」开关（macOS）
-  powerState: () => ipcRenderer.invoke('wechat:powerState'),          // { stayAwake, active, platform }
-  onQr: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('wechat:qr', h); return () => ipcRenderer.removeListener('wechat:qr', h); },
-  onConnected: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('wechat:connected', h); return () => ipcRenderer.removeListener('wechat:connected', h); },
-  onMessage: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('wechat:message', h); return () => ipcRenderer.removeListener('wechat:message', h); },
-  onExpired: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('wechat:expired', h); return () => ipcRenderer.removeListener('wechat:expired', h); },
-  onPower: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('wechat:power', h); return () => ipcRenderer.removeListener('wechat:power', h); },
 });
