@@ -392,18 +392,6 @@ async function contentSearch(query, rootPath) {
   return { results, truncated: paths.length > results.length, engine: 'spotlight' };
 }
 
-async function recentFiles(rootPath) {
-  const root = resolvePath(rootPath);
-  const all = [];
-  const { truncated } = await walk(root, {
-    limit: 30000,
-    deadline: Date.now() + 3500,
-    onFile: (f) => { if (!f.name.startsWith('.')) all.push(f); },
-  });
-  all.sort((a, b) => b.mtime - a.mtime);
-  return { results: all.slice(0, 60), truncated };
-}
-
 // ---------- 文件操作（编辑 / 废纸篓 / 重命名 / 新建）----------
 // 都带护栏：编辑只认文本类、删除走系统废纸篓可恢复、名称拒绝路径分隔符与空字节。
 
@@ -1348,9 +1336,6 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/content') {
       return sendJSON(res, 200, await contentSearch(qp.get('q'), qp.get('root') || HOME));
-    }
-    if (p === '/api/recent') {
-      return sendJSON(res, 200, await recentFiles(qp.get('root') || HOME));
     }
     if (p === '/api/term-verify' && req.method === 'POST') {
       return sendJSON(res, 200, await termVerify(await readBody(req)));

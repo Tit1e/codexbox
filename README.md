@@ -94,10 +94,6 @@ The UI was designed with [huashu-design](https://github.com/alchaincyf/huashu-de
   Every file Codex writes makes its card ripple and glow by change frequency; the light follows wherever Codex goes.
 - **跟随模式 / Follow mode** — 一键让文件视图 + 预览跟踪 Codex 正在编辑的文件：代码随新写行高亮闪烁，HTML 边写边实时渲染（双缓冲、零白闪），Markdown 实时渲染。任何手动浏览立即把控制权交还给你。
   One click and the file view + preview track whatever Codex edits: code scrolls with freshly written lines flashing, HTML renders live as it is written (double-buffered, zero white flash), and Markdown renders live. Any manual browsing hands control back to you instantly.
-- **会话回放 / Session replay** — 像刷视频一样拖时间轴，重现这段时间 Codex 一步步改了哪些文件。
-  Drag the timeline like scrubbing a video to replay which files Codex touched, step by step.
-- **变更收件箱 / Change inbox** — 跨多个项目汇总本会话所有被改动的文件，多项目并行跑 Codex 不再各看各的。
-  All files modified this session, aggregated across parallel Codex runs.
 - **Git 改动 diff / Git diff** — Monaco 只读 DiffEditor 并排展示 HEAD vs 当前工作区，看清 Codex 到底改了哪几行。
   Monaco read-only DiffEditor, HEAD vs working tree side by side.
 
