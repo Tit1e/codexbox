@@ -159,12 +159,13 @@ function cmpVer(a, b) {
   for (let i = 0; i < 3; i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d; }
   return 0;
 }
-const REL_PAGE = 'https://github.com/alchaincyf/fanbox/releases/latest';
+const RELEASE_REPO = 'Tit1e/fanbox';
+const REL_PAGE = `https://github.com/${RELEASE_REPO}/releases/latest`;
 async function fetchLatestRelease() {
   // 先走 API（信息全）；代理共享出口 IP 很容易吃 GitHub API 的未认证限流（60 次/小时/IP，403），
   // 失败就退回抓 releases/latest 网页重定向——重定向后的 URL 自带 tag，且不占 API 配额
   try {
-    const res = await net.fetch('https://api.github.com/repos/alchaincyf/fanbox/releases/latest', {
+    const res = await net.fetch(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`, {
       headers: { 'User-Agent': 'fanbox-app', Accept: 'application/vnd.github+json' },
     });
     if (res.ok) {
@@ -228,7 +229,7 @@ ipcMain.handle('update:download', async (e, { version }) => {
   const ver = String(version || '').replace(/^v/, '');
   if (!/^\d+\.\d+\.\d+$/.test(ver)) return { ok: false, error: 'bad version' };
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const url = `https://github.com/alchaincyf/fanbox/releases/download/v${ver}/FanBox-${ver}-${arch}.dmg`;
+  const url = `https://github.com/${RELEASE_REPO}/releases/download/v${ver}/FanBox-${ver}-${arch}.dmg`;
   const dest = path.join(app.getPath('downloads'), `FanBox-${ver}-${arch}.dmg`);
   const send = (m) => { if (win && !win.isDestroyed()) win.webContents.send('update:progress', m); };
   updDownloading = true;
