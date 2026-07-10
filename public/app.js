@@ -196,7 +196,7 @@ const state = {
   sort: localStorage.getItem('fb_sort') || 'name',
   showHidden: localStorage.getItem('fb_hidden') === '1',
   filter: '', selected: null, cursor: -1, cols: 1, visible: [],
-  favorites: [], recentOpened: [], recentMode: false, skillsMode: false,
+  favorites: [], recentOpened: [], recentMode: false,
   previewW: Number(localStorage.getItem('fb_preview_w')) || 0, // 0 = 用户还没拖过，走 1:2 比例默认
   previewH: Number(localStorage.getItem('fb_preview_h')) || 0,
   sidebarCollapsed: localStorage.getItem('fb_sidebar_collapsed') === '1',
@@ -278,7 +278,6 @@ async function navigate(p, pushHistory = true) {
     state.breadcrumb = data.breadcrumb;
     state.parent = data.parent;
     state.recentMode = false;
-    state.skillsMode = false;
     state.cursor = -1;
     render();
     renderRootsActive();
@@ -310,7 +309,6 @@ function render() {
 function renderBreadcrumb() {
   const bc = $('#breadcrumb');
   bc.innerHTML = '';
-  if (state.skillsMode) { bc.innerHTML = `<span class="crumb last">Skills 透视</span>`; return; }
   if (state.recentMode) { bc.innerHTML = `<span class="crumb last">${ic('clock', 'currentColor', 15)} 最近修改的文件</span>`; return; }
   (state.breadcrumb || []).forEach((c, i, arr) => {
     if (i > 0) { const s = document.createElement('span'); s.className = 'sep'; s.textContent = '›'; bc.appendChild(s); }
@@ -358,20 +356,18 @@ function visibleEntries() {
 // 底部状态条：当前文件夹的基础信息小字常驻，「占用透视」入口也安在这
 function renderStatusbar() {
   const sb = $('#statusbar'); if (!sb) return;
-  if (state.skillsMode || state.recentMode || !state.cwd) { sb.classList.add('hidden'); return; }
+  if (state.recentMode || !state.cwd) { sb.classList.add('hidden'); return; }
   const list = state.visible || [];
   const dirs = list.filter((e) => e.isDir).length;
   const files = list.length - dirs;
   const bytes = list.reduce((a, e) => a + (e.isDir ? 0 : e.size || 0), 0);
   sb.classList.remove('hidden');
-  sb.innerHTML = `<span>${list.length} 项${dirs ? ` · ${dirs} 文件夹` : ''}${files ? ` · ${files} 文件 ${fmtSize(bytes)}` : ''}</span><span class="sb-links">${state.project ? '<a id="sb-rel" title="版本号→CHANGELOG→打包→push→Release 一条龙，在终端跑">发版</a>' : ''}<a id="sb-mem" title="这个文件夹里 AI 干过什么：历史会话、改过的文件、一键续上">项目记忆</a><a id="sb-snap" title="agent 每轮开工前的自动存档，可一键回到任意一轮之前">回合存档</a><a id="sb-du" title="算上子目录的真实磁盘占用">占用透视</a></span>`;
+  sb.innerHTML = `<span>${list.length} 项${dirs ? ` · ${dirs} 文件夹` : ''}${files ? ` · ${files} 文件 ${fmtSize(bytes)}` : ''}</span><span class="sb-links">${state.project ? '<a id="sb-rel" title="版本号→CHANGELOG→打包→push→Release 一条龙，在终端跑">发版</a>' : ''}<a id="sb-mem" title="这个文件夹里 AI 干过什么：历史会话、改过的文件、一键续上">项目记忆</a><a id="sb-du" title="算上子目录的真实磁盘占用">占用透视</a></span>`;
   $('#sb-du').onclick = () => diskPanel(state.cwd);
   $('#sb-mem').onclick = () => memoryPanel(state.cwd);
-  $('#sb-snap').onclick = () => snapshotPanel(state.cwd);
   const rel = $('#sb-rel'); if (rel) rel.onclick = () => releasePanel();
 }
 function renderFiles() {
-  if (state.skillsMode) return; // skills 视图自管 #file-area，文件渲染不要清掉它
   const area = $('#file-area');
   const list = visibleEntries();
   state.visible = list;
@@ -714,9 +710,9 @@ function renderHtmlPreview(data, meta) {
 async function showDiff(e) {
   if (follow.on) setFileFollow(false, '手动接管，文件跟随已停');
   const data = await api('/api/git-file?path=' + encodeURIComponent(e.path));
-  if (!data.isRepo && !data.shadow) { toast('该文件不在 git 仓库里，也还没有回合存档（跑过 agent 就有了）', true); return; }
+  if (!data.isRepo) { toast('该文件不在 git 仓库里', true); return; }
   if (!data.diffable) { toast('该类型不支持 diff', true); return; }
-  if (!data.isNew && (data.original || '') === (data.modified || '')) { toast(data.shadow ? '与上一回合存档无差异' : '与 HEAD 无差异'); return; }
+  if (!data.isNew && (data.original || '') === (data.modified || '')) { toast('与 HEAD 无差异'); return; }
   if (!await mona.load()) { toast('编辑器未就绪', true); return; }
   if (!await guardDirty()) return;
   mona.disposeIfAny(); crepe.disposeIfAny(); imgEditState = null;
@@ -727,7 +723,7 @@ async function showDiff(e) {
   renderPreviewFoot(e);
   const body = $('#preview-body');
   body.innerHTML =
-    `<div class="editor-bar"><span class="editor-hint">${data.isNew ? (data.shadow ? '新文件（上一回合存档时还没有）' : '新文件（HEAD 中不存在）') : (data.shadow ? `左：回合存档（${fmtTime(data.baseTs)}）　·　右：当前` : '左：HEAD　·　右：当前工作区')} · 只读</span><button id="diff-close" class="ghost-btn">返回预览</button></div>` +
+    `<div class="editor-bar"><span class="editor-hint">${data.isNew ? '新文件（HEAD 中不存在）' : '左：HEAD　·　右：当前工作区'} · 只读</span><button id="diff-close" class="ghost-btn">返回预览</button></div>` +
     `<div id="ed-host" class="mona-host"></div>`;
   mona.openDiff($('#ed-host'), data.original, data.modified, (e.name.split('.').pop() || '').toLowerCase());
   $('#diff-close').onclick = () => openPreview(e);
@@ -1593,7 +1589,7 @@ async function memoryPanel(dirPath) {
   const d = await api('/api/project-memory?path=' + encodeURIComponent(dirPath));
   const body = ov.querySelector('.mem-body');
   if (!d.ok || !d.sessions.length) {
-    body.innerHTML = '<div class="empty-state">这个文件夹还没有 agent 会话记录<br><br><span class="usage-sub">在这里跑过 Claude Code / Codex 之后，历史会话会出现在这里</span></div>';
+    body.innerHTML = '<div class="empty-state">这个文件夹还没有 agent 会话记录<br><br><span class="empty-state-sub">在这里跑过 Claude Code / Codex 之后，历史会话会出现在这里</span></div>';
     return;
   }
   body.innerHTML = d.sessions.map((s, i) => `
@@ -1628,60 +1624,6 @@ async function memoryPanel(dirPath) {
       await navigate(dirOf(p));
       const e = state.entries.find((x) => x.path === p);
       if (e) { state.selected = p; openPreview(e); renderFiles(); }
-    };
-  });
-}
-
-// 回合存档：agent 每轮开工前的自动快照列表 + 一键回滚。
-// 「AI 弄坏了东西怎么办」从一种恐惧变成一个按钮：回滚前会再自动存一份，回滚本身也能滚回来
-async function snapshotPanel(dirPath) {
-  const old = $('.snap-overlay'); if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.className = 'input-overlay snap-overlay';
-  ov.innerHTML = `<div class="input-dialog snap-dialog">
-    <div class="input-title">回合存档 · ${escapeHtml(dirPath.replace(state.home, '~'))}</div>
-    <div class="snap-body"><div class="cmdk-loading">读存档中…</div></div></div>`;
-  document.body.appendChild(ov);
-  const onKey = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(); } };
-  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
-  ov.onclick = (ev) => { if (ev.target === ov) close(); };
-  document.addEventListener('keydown', onKey, true);
-  const d = await api('/api/snapshots?path=' + encodeURIComponent(dirPath));
-  const body = ov.querySelector('.snap-body');
-  if (!d.project || !d.snaps.length) {
-    body.innerHTML = '<div class="empty-state">这个文件夹还没有存档<br><br><span class="usage-sub">在内嵌终端里跑 agent 时，每轮开工前会自动存一份，坏了随时能回来</span></div>';
-    return;
-  }
-  const clock = (ts) => {
-    const t = new Date(ts); const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-    return t.toDateString() === new Date().toDateString() ? hm : `${t.getMonth() + 1}/${t.getDate()} ${hm}`;
-  };
-  const projName = baseOf(d.project);
-  body.innerHTML = `<div class="snap-hint">每一条都是当时整个项目的完整状态。恢复前会自动把当前状态也存一份，随时能再滚回来。</div>` +
-    d.snaps.map((s, i) => `
-    <div class="snap-row">
-      <span class="snap-time" title="${new Date(s.ts).toLocaleString()}">${clock(s.ts)}</span>
-      <span class="snap-lb">${escapeHtml(s.label)}${i === 0 ? '<i class="snap-latest">最新</i>' : ''}</span>
-      <span class="snap-ago">${fmtTime(s.ts)}</span>
-      <button class="ghost-btn snap-restore" data-i="${i}">回到这时</button>
-    </div>`).join('');
-  body.querySelectorAll('.snap-restore').forEach((b) => {
-    b.onclick = async () => {
-      const s = d.snaps[Number(b.dataset.i)];
-      // agent 正在这个项目里干活时不给回滚：一边写一边恢复只会两败俱伤
-      let busy = false;
-      term.sessions.forEach((t) => {
-        const c = t.cwd || t.startDir || '';
-        if (!t.dead && t.status === 'busy' && (c === d.project || c.startsWith(d.project + '/') || d.project.startsWith(c + '/'))) busy = true;
-      });
-      if (busy) { toast('这个项目的 agent 正在干活，先等它停下（或按 Esc 打断）再恢复', true); return; }
-      if (!await confirmDialog(`把「${projName}」整个恢复到 ${clock(s.ts)} 存档时的样子？之后的改动会被移除（当前状态已自动存档，可再滚回来）`)) return;
-      b.disabled = true; b.textContent = '恢复中…';
-      const r = await apiPost('/api/snapshot-restore', { path: d.project, hash: s.hash });
-      if (!r.ok) { toast(r.error || '恢复失败', true); b.disabled = false; b.textContent = '回到这时'; return; }
-      close();
-      toast(`已恢复到 ${clock(s.ts)} · 恢复前的状态也存了一份`);
-      navigate(state.cwd);
     };
   });
 }
@@ -2320,9 +2262,7 @@ function bindEvents() {
   $('#btn-changes').onclick = () => toggleChangesPanel();
   $('#btn-terminal').onclick = () => term.toggle();
   bindAgentButtons();
-  usagePanel.bind();
   shotTray.init();
-  $('#skills-entry').onclick = () => skillsView.show();
   $('#term-newtab').onclick = () => term.newTab();
   $('#term-max').onclick = () => term.toggleMax();
   // 双击终端顶栏空白处（避开标签/按钮/输入框）= 铺满终端：agent 交互窗口最重要，给它一键放到最大
@@ -2366,9 +2306,6 @@ function bindEvents() {
       }
       return;
     }
-    // skill 行拖进终端：注入 /name 或 $name（按会话里跑的 agent），不是当路径插
-    const sk = ev.dataTransfer.getData('application/x-fanbox-skill');
-    if (sk) { invokeSkillInTerm(sk); return; }
     const p = ev.dataTransfer.getData('application/x-fanbox-path') || ev.dataTransfer.getData('text/plain');
     if (p) term.insertPath(p);
   });
@@ -2396,7 +2333,7 @@ function bindEvents() {
   const droppableTypes = (t) => t.includes('Files') || (t.includes('text/uri-list') && !t.includes('application/x-fanbox-path'));
   const clearDropHi = () => { fileArea.classList.remove('area-drop'); fileArea.querySelectorAll('.item.drop-into').forEach((x) => x.classList.remove('drop-into')); };
   fileArea.addEventListener('dragover', (ev) => {
-    if (state.skillsMode || !droppableTypes(ev.dataTransfer.types)) return;
+    if (!droppableTypes(ev.dataTransfer.types)) return;
     ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy';
     const item = ev.target.closest('.item');
     const idx = item ? Number(item.dataset.idx) : -1;
@@ -2409,7 +2346,7 @@ function bindEvents() {
     const dt = ev.dataTransfer;
     const hasFiles = dt.files && dt.files.length;
     const url = (!hasFiles && dt.types.includes('text/uri-list') && !dt.types.includes('application/x-fanbox-path')) ? dt.getData('text/uri-list') : '';
-    if (state.skillsMode || (!hasFiles && !url)) return;
+    if (!hasFiles && !url) return;
     ev.preventDefault(); clearDropHi();
     const item = ev.target.closest('.item');
     const idx = item ? Number(item.dataset.idx) : -1;
@@ -3123,14 +3060,9 @@ const term = {
     // 续命只刷新 lastData（推迟评估时机），不刷新 lastReal（任务时长只数自发输出，打字不算工时）
     if (now - (s.lastInput || 0) < 400) { if (s.status === 'busy') s.lastData = now; return; }
     s.lastData = now; s.lastReal = now;
-    if (s.status !== 'busy') { s.status = 'busy'; s.busyStart = now; this.renderTabs(); this.roundSnapshot(s); }
+    if (s.status !== 'busy') { s.status = 'busy'; s.busyStart = now; this.renderTabs(); }
     if (s.id !== this.active) { if (!s.unread) { s.unread = true; this.renderTabs(); } }
     this.ensureStatusTick();
-  },
-  // 回合安全带：agent 开工瞬间给项目静默存档。资格/节流/判重全在服务端，这里只管扔，失败不打扰
-  roundSnapshot(s) {
-    const dir = s.cwd || s.startDir;
-    if (dir) apiPost('/api/snapshot', { path: dir, label: '回合 · ' + (s.title || 'shell') }).catch(() => {});
   },
   // 取缓冲区末尾 n 行纯文本：确认对话框和忙碌页脚都画在底部
   tailText(s, n = 25) {
@@ -3237,289 +3169,6 @@ const term = {
   // try/catch 兜住 GPU 故障，别让单个 session 的渲染异常连累其它 session 或拖垮渲染进程（#35）。
   retheme() { const th = this.theme(); this.sessions.forEach((s) => { try { s.xterm.options.theme = th; s.webgl?.clearTextureAtlas?.(); } catch { /* */ } }); },
 };
-
-// ---------- Agent 用量面板（侧栏常驻，可开合）----------
-// Claude Code 是官方限额窗口（5h/周，OAuth 接口）+ 本地 token 统计兜底，Codex 是官方配额快照（来自其会话日志）
-const usagePanel = {
-  timer: null,
-  fmtTok(n) {
-    if (n >= 1e9) return (n / 1e9).toFixed(n < 1e10 ? 1 : 0) + 'B';
-    if (n >= 1e6) return (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M';
-    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'k';
-    return String(n);
-  },
-  fmtReset(sec) {
-    if (!sec) return '';
-    const d = new Date(sec * 1000);
-    const sameDay = d.toDateString() === new Date().toDateString();
-    const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    return (sameDay ? '' : '周' + '日一二三四五六'[d.getDay()] + ' ') + hm + ' 重置';
-  },
-  ago(ms) {
-    const m = Math.round((Date.now() - ms) / 60000);
-    if (m < 2) return '刚刚';
-    if (m < 60) return m + ' 分钟前';
-    if (m < 1440) return Math.round(m / 60) + ' 小时前';
-    return Math.round(m / 1440) + ' 天前';
-  },
-  bar(label, pct, extra) {
-    const v = Math.max(0, Math.min(100, Math.round(pct)));
-    const danger = v >= 85 ? ' danger' : '';
-    return `<div class="usage-row"><span class="usage-label">${label}</span>
-      <span class="usage-bar"><i class="${danger.trim()}" style="width:${v}%"></i></span>
-      <span class="usage-num${danger}">${v}%</span></div>
-      ${extra ? `<div class="usage-sub">${extra}</div>` : ''}`;
-  },
-  render(d) {
-    const box = $('#usage-body');
-    if (!d || !d.ok) { box.innerHTML = '<div class="usage-sub">读取失败</div>'; return; }
-    let h = '';
-    if (d.codex) {
-      const c = d.codex;
-      h += `<div class="usage-agent">Codex${c.planType ? ` <i class="usage-plan">${escapeHtml(c.planType)}</i>` : ''}</div>`;
-      if (c.primary) h += this.bar('5h 窗口', c.primary.usedPercent, c.primary.stale ? '窗口已重置，跑一次 Codex 才有新数' : '');
-      if (c.secondary) h += this.bar('周配额', c.secondary.usedPercent, c.secondary.stale ? '窗口已重置，跑一次 Codex 才有新数' : this.fmtReset(c.secondary.resetsAt));
-      h += `<div class="usage-sub">快照：${this.ago(c.capturedAt)}的 Codex 会话</div>`;
-    }
-    if (d.claude) {
-      const c = d.claude;
-      h += `<div class="usage-agent">Claude Code</div>`;
-      if (c.official) {
-        // 官方限额窗口（和 Claude Code /usage 面板同源）：5h 滚动窗口 + 周配额，优先展示
-        if (c.official.fiveHour) h += this.bar('5h 窗口', c.official.fiveHour.usedPercent, this.fmtReset(c.official.fiveHour.resetsAt));
-        if (c.official.sevenDay) h += this.bar('周配额', c.official.sevenDay.usedPercent, this.fmtReset(c.official.sevenDay.resetsAt));
-      }
-      if (c.last5h) {
-        // 本地 token 统计照常保留（拿不到官方数据时就只剩这块）
-        h += `<div class="usage-trio">
-          <span><b>${this.fmtTok(c.last5h.total)}</b>近5h</span>
-          <span><b>${this.fmtTok(c.today.total)}</b>今日</span>
-          <span><b>${this.fmtTok(c.week.total)}</b>本周</span>
-        </div>
-        <div class="usage-sub">token 总量 · 本地会话日志统计</div>`;
-      }
-    }
-    if (!d.codex && !d.claude) h = '<div class="usage-sub">没找到 Claude Code / Codex 的本机会话记录</div>';
-    box.innerHTML = h;
-  },
-  async refresh() {
-    try { this.render(await api('/api/agent-usage')); }
-    catch { this.render(null); }
-  },
-  open() { return localStorage.getItem('fb_usage_open') === '1'; },
-  apply() {
-    const on = this.open();
-    $('#usage-body').classList.toggle('hidden', !on);
-    $('#usage-arrow').textContent = on ? '▾' : '▸';
-    clearInterval(this.timer); this.timer = null;
-    if (on) { this.refresh(); this.timer = setInterval(() => this.refresh(), 60000); }
-  },
-  bind() {
-    $('#usage-toggle').onclick = () => {
-      localStorage.setItem('fb_usage_open', this.open() ? '0' : '1');
-      this.apply();
-    };
-    this.apply();
-  },
-};
-
-// ---------- Skills 透视（主区全屏视图）----------
-const skillsView = {
-  data: null, filter: 'all', sort: 'hits', open: new Set(),
-  async show() {
-    state.skillsMode = true; state.recentMode = false; state.cursor = -1;
-    renderBreadcrumb();
-    $('#file-area').innerHTML = '<div class="cmdk-loading">扫描本机 skills…</div>';
-    try { this.data = await apiPost('/api/skills/refresh', { cwd: state.cwd }); } catch { $('#file-area').innerHTML = '<div class="nav-empty">扫描失败</div>'; return; }
-    this.render();
-  },
-  async reload() {
-    try { this.data = await api('/api/skills'); if (state.skillsMode) this.render(); } catch { /* */ }
-  },
-  srcTag(it) {
-    const cls = { claude: '', codex: ' codex', agents: ' codex', plugin: ' plugin', project: ' proj' }[it.source] || '';
-    return `<span class="sk-src${cls}">${escapeHtml(it.label)}</span>`;
-  },
-  ago(t) {
-    if (!t) return '—';
-    const m = Math.round((Date.now() - t) / 60000);
-    if (m < 60) return m < 2 ? '刚刚' : m + ' 分钟前';
-    if (m < 1440) return Math.round(m / 60) + ' 小时前';
-    return Math.round(m / 1440) + ' 天前';
-  },
-  rows() {
-    let arr = (this.data.items || []).slice();
-    const f = this.filter;
-    if (f === 'dup') arr = arr.filter((x) => x.copies);
-    else if (f === 'bad') arr = arr.filter((x) => x.issues.length);
-    else if (f === 'project') arr = arr.filter((x) => x.source === 'project');
-    else if (f === 'codex') arr = arr.filter((x) => x.source === 'codex' || x.source === 'agents');
-    else if (f !== 'all') arr = arr.filter((x) => x.source === f);
-    const ho = (x) => (x.residue || x.issues.length ? 0 : x.disabled ? 1 : 2);
-    if (this.sort === 'hits') arr.sort((a, b) => b.hits - a.hits || b.last - a.last || a.name.localeCompare(b.name));
-    if (this.sort === 'recent') arr.sort((a, b) => b.last - a.last || b.hits - a.hits);
-    if (this.sort === 'health') arr.sort((a, b) => ho(a) - ho(b) || b.hits - a.hits);
-    if (this.sort === 'name') arr.sort((a, b) => a.name.localeCompare(b.name));
-    return arr;
-  },
-  render() {
-    const o = this.data.overview;
-    const items = this.data.items || [];
-    const cnt = (fn) => items.filter(fn).length;
-    const over = o.budgetChars > o.budgetLimit;
-    const ratio = (o.budgetChars / o.budgetLimit).toFixed(1);
-    let h = `<div class="sk-wrap">
-      <div class="sk-stats">
-        <div class="sk-stat"><div class="sk-num">${o.unique}<small>/${o.total}</small></div><div class="sk-lbl">全部 skills</div><div class="sk-note">唯一 / 含跨端副本</div></div>
-        <div class="sk-stat"><div class="sk-num good">${o.active}</div><div class="sk-lbl">45 天内活跃</div><div class="sk-note">共 ${o.totalHits} 次触发</div></div>
-        <div class="sk-stat dust"><div class="sk-num">${o.dust}</div><div class="sk-lbl">在吃灰</div><div class="sk-note">45 天零触发</div></div>
-        <div class="sk-stat ${o.issues ? 'alert' : ''}"><div class="sk-num">${o.issues}</div><div class="sk-lbl">有问题</div><div class="sk-note">截断 / 缺 frontmatter / 残留</div></div>
-        <div class="sk-budget">
-          <div class="sk-lbl" style="display:flex;justify-content:space-between"><span>Claude 常驻预算（描述总量）</span>${over ? `<b class="bad-t">≈超限 ${ratio}×</b>` : ''}</div>
-          <div class="sk-bar"><i style="width:${Math.min(100, o.budgetChars / o.budgetLimit * 41)}%"></i><em></em></div>
-          <div class="sk-cap"><span>${o.budgetChars.toLocaleString()} 字符 / 预算约 ${o.budgetLimit.toLocaleString()}（估算）</span><span>${over ? '超出部分被静默丢弃，对应 skill 不会触发' : ''}</span></div>
-        </div>
-      </div>
-      <div class="sk-tools">
-        <div class="sk-chips">
-          ${[['all', '全部', items.length],
-             ['claude', 'Claude 全局', cnt((x) => x.source === 'claude')],
-             ['project', '项目', cnt((x) => x.source === 'project')],
-             ['plugin', '插件', cnt((x) => x.source === 'plugin')],
-             ['codex', 'Codex', cnt((x) => x.source === 'codex' || x.source === 'agents')],
-             ['dup', '跨端重复', cnt((x) => x.copies)],
-             ['bad', '仅看问题', o.issues]]
-            .map(([k, lbl, n]) => `<button class="sk-chip ${this.filter === k ? 'on' : ''}" data-f="${k}">${lbl} <i>${n}</i></button>`).join('')}
-        </div>
-        <select class="sk-sort" id="sk-sort">
-          <option value="hits" ${this.sort === 'hits' ? 'selected' : ''}>按触发次数</option>
-          <option value="recent" ${this.sort === 'recent' ? 'selected' : ''}>按最后触发</option>
-          <option value="health" ${this.sort === 'health' ? 'selected' : ''}>按健康度</option>
-          <option value="name" ${this.sort === 'name' ? 'selected' : ''}>按名称</option>
-        </select>
-      </div>
-      <div class="sk-thead"><span></span><span>Skill</span><span>来源</span><span class="r">45 天触发</span><span class="r">最后触发</span><span class="r">启用</span><span></span></div>`;
-    let dustMarked = false;
-    this.rows().forEach((it) => {
-      if (this.sort === 'hits' && this.filter === 'all' && !dustMarked && it.hits === 0) {
-        h += `<div class="sk-mark">以下 ${o.dust} 个 45 天零触发——启用中的描述仍在每次会话占用预算</div>`;
-        dustMarked = true;
-      }
-      const key = it.dir;
-      const dot = it.issues.length ? (it.residue || it.issues.some((s) => s.includes('缺')) ? 'bad' : 'warn') : 'ok';
-      h += `<div class="sk-row ${this.open.has(key) ? 'expanded' : ''} ${it.disabled ? 'off' : ''}" data-dir="${escapeHtml(key)}" draggable="true">
-        <span class="sk-dot ${dot}"></span>
-        <div class="sk-name">
-          <div class="nm">${escapeHtml(it.name)}${it.copies ? ` <i class="sk-dup">${it.copies.length} 处副本</i>` : ''}${it.disabled ? ' <i class="sk-offtag">已停用</i>' : ''}</div>
-          <div class="ds">${escapeHtml(it.issues[0] || it.desc || '')}</div>
-        </div>
-        ${this.srcTag(it)}
-        <div class="sk-hits ${it.hits ? '' : 'zero'}">${it.hits || '· 0 ·'}</div>
-        <div class="sk-last">${this.ago(it.last)}</div>
-        ${it.residue
-          ? '<div class="sk-last r">残留</div>'
-          : `<label class="sk-switch ${it.disabled ? '' : 'on'}" data-act="toggle" title="${it.disabled ? '启用（移回 skills 目录）' : '停用（移入 _disabled/，不删文件，立即对模型不可见）'}"><i></i></label>`}
-        <span class="sk-chev">▸</span>
-      </div>`;
-      if (this.open.has(key)) {
-        const cut = this.data.overview.descCut;
-        h += `<div class="sk-detail">
-          <div>
-            <div class="fd">${escapeHtml(it.desc || '（无 description）')}${it.descLen > 240 ? '…' : ''}</div>
-            ${it.descLen > cut ? `<div class="fd-cut">⚠ description 共 ${it.descLen.toLocaleString()} 字符，第 ${cut.toLocaleString()} 字符之后模型看不见——靠后段触发词的场景不会触发</div>` : ''}
-            ${it.issues.map((s) => `<div class="fd-cut">⚠ ${escapeHtml(s)}</div>`).join('')}
-            <div class="fd-acts">
-              ${it.residue ? '' : '<button data-act="invoke" class="primary">▶ 终端调用</button>'}
-              <button data-act="reveal">在文件区显示</button>
-              ${it.residue ? '' : '<button data-act="edit">编辑 SKILL.md</button>'}
-              <button data-act="trash" class="danger">移到废纸篓</button>
-            </div>
-          </div>
-          <dl class="fd-meta">
-            <dt>描述体积</dt><dd>${it.descLen.toLocaleString()} 字符${it.descLen > cut ? ' · 超截断线' : ''}</dd>
-            <dt>路径</dt><dd class="mono">${escapeHtml(tilde(it.dir))}</dd>
-            ${it.copies ? `<dt>全部副本</dt><dd class="mono">${it.copies.map(escapeHtml).join('<br>')}</dd>` : ''}
-          </dl>
-        </div>`;
-      }
-    });
-    h += '</div>';
-    const area = $('#file-area');
-    area.innerHTML = h;
-    this.bind(area);
-  },
-  bind(area) {
-    area.querySelector('.sk-chips').onclick = (e) => {
-      const c = e.target.closest('.sk-chip'); if (!c) return;
-      this.filter = c.dataset.f; this.render();
-    };
-    area.querySelector('#sk-sort').onchange = (e) => { this.sort = e.target.value; this.render(); };
-    area.querySelector('.sk-wrap').addEventListener('click', async (e) => {
-      const row = e.target.closest('.sk-row');
-      const detail = e.target.closest('.sk-detail');
-      const act = e.target.closest('[data-act]');
-      const dir = row ? row.dataset.dir : detail ? detail.previousElementSibling.dataset.dir : null;
-      if (!dir) return;
-      const it = this.data.items.find((x) => x.dir === dir);
-      if (act && it) {
-        e.stopPropagation();
-        if (act.dataset.act === 'toggle') {
-          const r = await apiPost('/api/skills/toggle', { dir, enable: it.disabled });
-          if (r.ok) { toast(it.disabled ? '已启用 ' + it.name : '已停用 ' + it.name + '（文件还在，随时可启用）'); this.reload(); }
-          else toast('操作失败：' + (r.error || ''), true);
-        } else if (act.dataset.act === 'invoke') {
-          invokeSkillInTerm(it.name);
-        } else if (act.dataset.act === 'reveal') {
-          navigate(dirOf(it.dir));
-        } else if (act.dataset.act === 'edit') {
-          await navigate(it.dir);
-          const e2 = state.entries.find((x) => x.name === 'SKILL.md');
-          if (e2) { state.selected = e2.path; openPreview(e2); renderFiles(); }
-        } else if (act.dataset.act === 'trash') {
-          const ok = await confirmDialog(`把「${it.name}」移到废纸篓？（系统废纸篓里随时可恢复）`);
-          if (!ok) return;
-          const r = await apiPost('/api/skills/trash', { dir });
-          if (r.ok) { toast('已移到废纸篓'); this.open.delete(dir); this.reload(); }
-          else toast('删除失败：' + (r.error || ''), true);
-        }
-        return;
-      }
-      if (row) { this.open.has(dir) ? this.open.delete(dir) : this.open.add(dir); this.render(); }
-    });
-    // 拖 skill 行 → 终端：带 skill 名专用类型；text/plain 给外部目标
-    area.querySelectorAll('.sk-row').forEach((r) => {
-      r.addEventListener('dragstart', (ev) => {
-        const it = this.data.items.find((x) => x.dir === r.dataset.dir);
-        if (!it) return;
-        ev.dataTransfer.setData('application/x-fanbox-skill', it.name);
-        ev.dataTransfer.setData('text/plain', '/' + it.name);
-        ev.dataTransfer.effectAllowed = 'copy';
-      });
-    });
-  },
-};
-
-// 把 skill 注入当前终端：claude 会话用 /name，codex 会话用 $name；裸 shell 提示先启动 agent
-async function invokeSkillInTerm(name) {
-  if (typeof term === 'undefined' || !term.available()) { toast('需要桌面版的内嵌终端', true); return; }
-  if ($('#terminal-panel').classList.contains('hidden')) term.open();
-  const s = term.sessions.find((x) => x.id === term.active);
-  if (!s || s.dead) { toast('先开一个终端并启动 agent', true); return; }
-  let prefix = '/';
-  try {
-    const r = await window.fanboxPty.proc(s.id);
-    const pn = String((r && r.proc) || '').split('/').pop().replace(/^-/, '').toLowerCase();
-    if (pn.includes('codex')) prefix = '$';
-    else if (['zsh', 'bash', 'fish', 'sh', 'dash', 'tcsh', 'nu'].includes(pn)) {
-      toast('终端里还没启动 agent——先点 Claude / Codex 启动按钮', true);
-      s.xterm.focus();
-      return;
-    }
-  } catch { /* 判断不了就按 claude 的 / 语法 */ }
-  term.input(s.id, prefix + name + ' ');
-  s.xterm.focus();
-  toast(`已注入 ${prefix}${name}，接着补一句话回车`);
-}
 
 // ---------- Monaco 编辑器（本地 vendor，离线可用；加载失败回退 textarea）----------
 const mona = {

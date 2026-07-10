@@ -14,10 +14,6 @@ window.FANBOX_DICT = {
   '收藏': 'Favorites',
   'Agent 项目': 'Agent projects',
   '最近被 Claude Code / Codex 处理过的项目，自动从两者的本机会话记录扫出来': 'Projects recently worked on by Claude Code / Codex, auto-discovered from their local session logs',
-  'Skills 透视': 'Skills overview',
-  '本机 Claude Code / Codex 的全部 skills：谁在干活、谁在吃灰、谁在静默失效': 'All Claude Code / Codex skills on this Mac: which ones pull their weight, which gather dust, which silently fail',
-  'Agent 用量': 'Agent usage',
-  'Claude Code / Codex 用量——官方限额窗口 + 本机会话日志，不用开着它们': 'Claude Code / Codex usage — official limit windows + local session logs, without keeping them open',
   '皮肤': 'Theme',
   '档案': 'Archive',
   '终端': 'Terminal',
@@ -62,19 +58,6 @@ window.FANBOX_DICT = {
   '这个文件夹里 AI 干过什么：历史会话、改过的文件、一键续上': 'What AI has done in this folder: past sessions, changed files, one-click resume',
   '占用透视': 'Disk usage',
   '算上子目录的真实磁盘占用': 'True disk usage including subfolders',
-  '回合存档': 'Round snapshots',
-  'agent 每轮开工前的自动存档，可一键回到任意一轮之前': 'Automatic snapshot before each agent round — one click back to any point',
-  '这个文件夹还没有存档': 'No snapshots for this folder yet',
-  '在内嵌终端里跑 agent 时，每轮开工前会自动存一份，坏了随时能回来': 'When an agent runs in the embedded terminal, a snapshot is taken before each round — you can always come back',
-  '每一条都是当时整个项目的完整状态。恢复前会自动把当前状态也存一份，随时能再滚回来。': 'Each entry is the full project state at that moment. Before restoring, the current state is snapshotted too, so you can always roll back again.',
-  '回到这时': 'Restore',
-  '恢复中…': 'Restoring…',
-  '最新': 'latest',
-  '读存档中…': 'Loading snapshots…',
-  '这个项目的 agent 正在干活，先等它停下（或按 Esc 打断）再恢复': 'An agent is working in this project — wait for it to stop (or press Esc to interrupt) before restoring',
-  '该文件不在 git 仓库里，也还没有回合存档（跑过 agent 就有了）': 'Not in a git repo and no round snapshot yet (run an agent once to get one)',
-  '与上一回合存档无差异': 'No changes since the last round snapshot',
-  '恢复失败': 'Restore failed',
   '⚠ 文件太多，结果可能不完整。进入更具体的子目录可看到全部。': '⚠ Too many files — results may be incomplete. Open a more specific subfolder to see everything.',
   '扫描最近修改的文件…': 'Scanning recently modified files…',
   '改': 'edited',
@@ -319,57 +302,6 @@ window.FANBOX_DICT = {
   '终端已退出': 'Terminal exited',
   '[进程已退出 — 回车重开，或 ✕ 关闭]': '[Process exited — Enter to restart, or ✕ to close]',
 
-  // ---------- 用量面板 ----------
-  '5h 窗口': '5h window',
-  '周配额': 'Weekly quota',
-  '窗口已重置，跑一次 Codex 才有新数': 'Window reset — run Codex once for fresh numbers',
-  '近5h': 'last 5h',
-  '今日': 'today',
-  '本周': 'this week',
-  'token 总量 · 本地会话日志统计': 'Total tokens · from local session logs',
-  '没找到 Claude Code / Codex 的本机会话记录': 'No local Claude Code / Codex session logs found',
-
-  // ---------- Skills 透视 ----------
-  '扫描本机 skills…': 'Scanning local skills…',
-  '扫描失败': 'Scan failed',
-  '全部 skills': 'All skills',
-  '唯一 / 含跨端副本': 'unique / incl. cross-CLI copies',
-  '45 天内活跃': 'Active in 45 days',
-  '在吃灰': 'Gathering dust',
-  '45 天零触发': 'Zero hits in 45 days',
-  '有问题': 'Issues',
-  '截断 / 缺 frontmatter / 残留': 'truncated / missing frontmatter / residue',
-  'Claude 常驻预算（描述总量）': 'Claude resident budget (total description size)',
-  '超出部分被静默丢弃，对应 skill 不会触发': 'Overflow is silently dropped — those skills never trigger',
-  '全部': 'All',
-  'Claude 全局': 'Claude global',
-  '项目': 'Project',
-  '插件': 'Plugin',
-  '跨端重复': 'Cross-CLI dupes',
-  '仅看问题': 'Issues only',
-  '按触发次数': 'By hits',
-  '按最后触发': 'By last hit',
-  '按健康度': 'By health',
-  '按名称': 'By name',
-  '来源': 'Source',
-  '45 天触发': 'Hits (45d)',
-  '最后触发': 'Last hit',
-  '启用': 'On',
-  '已停用': 'disabled',
-  '残留': 'residue',
-  '启用（移回 skills 目录）': 'Enable (move back into skills folder)',
-  '停用（移入 _disabled/，不删文件，立即对模型不可见）': 'Disable (move into _disabled/ — files kept, instantly hidden from the model)',
-  '（无 description）': '(no description)',
-  '▶ 终端调用': '▶ Invoke in terminal',
-  '在文件区显示': 'Show in file view',
-  '编辑 SKILL.md': 'Edit SKILL.md',
-  '描述体积': 'Description size',
-  '路径': 'Path',
-  '全部副本': 'All copies',
-  '需要桌面版的内嵌终端': "Requires the desktop app's embedded terminal",
-  '先开一个终端并启动 agent': 'Open a terminal and start an agent first',
-  '终端里还没启动 agent——先点 Claude / Codex 启动按钮': 'No agent running in this terminal yet — hit the Claude / Codex launch button first',
-
   // ---------- 变更收件箱 / 会话回放 ----------
   '本会话变更': 'Changes this session',
   '还没有捕捉到文件变更。': 'No file changes captured yet.',
@@ -411,7 +343,7 @@ window.FANBOX_DICT_RULES = [
   [/^(\d+) 项( · (\d+) 文件夹)?( · (\d+) 文件 (.+))?$/, (m) => `${m[1]} items${m[3] ? ` · ${m[3]} folders` : ''}${m[5] ? ` · ${m[5]} files ${m[6]}` : ''}`],
   // 压缩包条目数：123 项 / 500+ 项
   [/^(\d+)(\+)? 项$/, (m) => `${m[1]}${m[2] || ''} items`],
-  // 相对时间（fmtTime / usagePanel.ago / skillsView.ago）
+  // 相对时间（fmtTime）
   [/^(\d+) 分钟前$/, (m) => `${m[1]} min ago`],
   [/^(\d+) 小时前$/, (m) => `${m[1]} hr ago`],
   [/^(\d+) 天前$/, (m) => `${m[1]} days ago`],
@@ -450,12 +382,6 @@ window.FANBOX_DICT_RULES = [
   [/^编辑 · (.+)$/, (m) => `Edit · ${m[1]}`],
   [/^项目记忆 · (.+)$/, (m) => `Project memory · ${m[1]}`],
   [/^磁盘占用 · (.+)$/, (m) => `Disk usage · ${m[1]}`],
-  // 回合存档
-  [/^回合存档 · (.+)$/, (m) => `Round snapshots · ${m[1]}`],
-  [/^把「(.+)」整个恢复到 (.+) 存档时的样子？之后的改动会被移除（当前状态已自动存档，可再滚回来）$/, (m) => `Restore "${m[1]}" to its state at ${m[2]}? Later changes will be removed (the current state was just snapshotted, so you can roll back again)`],
-  [/^已恢复到 (.+) · 恢复前的状态也存了一份$/, (m) => `Restored to ${m[1]} · the previous state was snapshotted too`],
-  [/^左：回合存档（(.+)）　·　右：当前 · 只读$/, (m) => `Left: round snapshot (${m[1]}) · Right: current · read-only`],
-  ['新文件（上一回合存档时还没有） · 只读', 'New file (did not exist in the last round snapshot) · read-only'],
   // 预览底部：创建/修改时间
   [/^创建 (.+)$/, (m) => `Created ${m[1]}`],
   [/^改 (.+)$/, (m) => `Modified ${m[1]}`],
@@ -474,8 +400,7 @@ window.FANBOX_DICT_RULES = [
   // 发版
   [/^当前 v(.+) →$/, (m) => `now v${m[1]} →`],
   [/^v(.+) 发版序列已在终端开跑$/, (m) => `v${m[1]} release pipeline running in terminal`],
-  // 磁盘占用：共 1.6 GB · 只显示前 N 项（先匹配 skills 的「共 N 次触发」）
-  [/^共 (\d+) 次触发$/, (m) => `${m[1]} hits total`],
+  // 磁盘占用：共 1.6 GB · 只显示前 N 项
   [/^共 (.+?)( · 只显示前 (\d+) 项)?$/, (m) => `Total ${m[1]}${m[3] ? ` · top ${m[3]} shown` : ''}`],
   // 命令面板
   [/^当前目录 (.+)$/, (m) => `This folder ${m[1]}`],
@@ -487,23 +412,6 @@ window.FANBOX_DICT_RULES = [
   [/^(.+) 在等你拍板$/, (m) => `${m[1]} is waiting on you`],
   [/^(.+) 已空闲$/, (m) => `${m[1]} is now idle`],
   [/^(.+) 的进程结束了$/, (m) => `Process in ${m[1]} ended`],
-  // 用量面板：重置时间
-  [/^(\d{1,2}:\d{2}) 重置$/, (m) => `Resets ${m[1]}`],
-  [/^周([日一二三四五六]) (\d{1,2}:\d{2}) 重置$/, (m) => `Resets ${({ 日: 'Sun', 一: 'Mon', 二: 'Tue', 三: 'Wed', 四: 'Thu', 五: 'Fri', 六: 'Sat' })[m[1]]} ${m[2]}`],
-  [/^快照：(.+)的 Codex 会话$/, (m) => {
-    const t = m[1] === '刚刚' ? 'just now' : m[1].replace(/^(\d+) 分钟前$/, '$1 min ago').replace(/^(\d+) 小时前$/, '$1 hr ago').replace(/^(\d+) 天前$/, '$1 days ago');
-    return `Snapshot: Codex session from ${t}`;
-  }],
-  // Skills 透视
-  [/^以下 (\d+) 个 45 天零触发——启用中的描述仍在每次会话占用预算$/, (m) => `The ${m[1]} below had zero hits in 45 days — enabled descriptions still eat budget every session`],
-  [/^(\d+) 处副本$/, (m) => `${m[1]} copies`],
-  [/^≈超限 ([\d.]+)×$/, (m) => `≈${m[1]}× over`],
-  [/^([\d,]+) 字符 \/ 预算约 ([\d,]+)（估算）$/, (m) => `${m[1]} chars / ~${m[2]} budget (est.)`],
-  [/^⚠ description 共 ([\d,]+) 字符，第 ([\d,]+) 字符之后模型看不见——靠后段触发词的场景不会触发$/, (m) => `⚠ description is ${m[1]} chars; the model can't see past char ${m[2]} — trigger words in the tail will never fire`],
-  [/^([\d,]+) 字符( · 超截断线)?$/, (m) => `${m[1]} chars${m[2] ? ' · past cutoff' : ''}`],
-  [/^已启用 (.+)$/, (m) => `Enabled ${m[1]}`],
-  [/^已停用 (.+)（文件还在，随时可启用）$/, (m) => `Disabled ${m[1]} (files kept — re-enable anytime)`],
-  [/^已注入 ([/$]\S+)，接着补一句话回车$/, (m) => `Injected ${m[1]} — add a sentence and press Enter`],
   // 变更收件箱 / 回放
   [/^本会话变更 · (\d+)$/, (m) => `Changes this session · ${m[1]}`],
   [/^会话回放 · (\d+) 次写入 · 跨 (.+)$/, (m) => {
