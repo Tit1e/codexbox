@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖浏览器 window 全局对象，收录 index.html 与 app.js 使用的中文界面文案
+ * [OUTPUT]: 对外提供 FANBOX_DICT 静态词典和 FANBOX_DICT_RULES 动态翻译规则
+ * [POS]: public 模块的英文词典真源，由 i18n.js 在运行时消费
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 'use strict';
 // FanBox 界面词典：中文原文 → 英文。由 i18n.js 消费；缺词条时英文界面回退显示中文。
 window.FANBOX_DICT = {

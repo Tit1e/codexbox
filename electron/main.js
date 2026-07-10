@@ -436,72 +436,13 @@ app.on('window-all-closed', () => {
   terminals.forEach((p) => { try { p.kill(); } catch { /* */ } });
   terminals.clear();
   if (lidActive) { trySetDisableSleep(false); lidActive = false; } // 终端没了，别让 Mac 一直不睡
-  recorders.forEach((r) => { try { r.stream.end(); } catch { /* */ } }); // 收尾刷盘，别丢最后几行
-  recorders.clear();
   if (process.platform !== 'darwin') app.quit();
 });
 // 退出兜底：无论怎么退（⌘Q、崩溃前的正常退出），都恢复系统休眠，绝不留禁休眠的烂摊子
 app.on('will-quit', () => { if (process.platform === 'darwin') trySetDisableSleep(false); });
 
-// ---------- 终端录制（黑匣子）：把 PTY 字节流旁路成 asciinema v2 .cast ----------
-// 设计铁律：录制器是一根哑管子——只异步旁路字节，全程 try/catch，写失败就静默自废，
-// 绝不把异常抛回 PTY 数据通路。所有「聪明」（压缩/变速/导出）都推迟到回放层做。
-const recorders = new Map(); // id -> { stream, start, path }
-const REC_DIR = () => path.join(app.getPath('userData'), 'recordings');
-function recEnabled() { return process.env.FANBOX_NO_RECORD !== '1'; }
-// 常开录制不能让磁盘无限涨：保留最近 60 个 / 总量 800MB，超了从最旧删起（正在录的跳过）
-function recPrune() {
-  try {
-    const dir = REC_DIR();
-    if (!fs.existsSync(dir)) return;
-    const live = new Set([...recorders.values()].map((r) => r.path));
-    const files = fs.readdirSync(dir).filter((n) => n.endsWith('.cast'))
-      .map((n) => path.join(dir, n)).filter((f) => !live.has(f))
-      .map((f) => { try { return { f, st: fs.statSync(f) }; } catch { return null; } }).filter(Boolean)
-      .sort((a, b) => a.st.mtimeMs - b.st.mtimeMs); // 旧→新
-    const MAX_FILES = 60, MAX_BYTES = 800 * 1024 * 1024;
-    let total = files.reduce((s, x) => s + x.st.size, 0), count = files.length;
-    for (const x of files) {
-      if (count <= MAX_FILES && total <= MAX_BYTES) break;
-      try { fs.rmSync(x.f, { force: true }); total -= x.st.size; count--; } catch { /* */ }
-    }
-  } catch { /* */ }
-}
-function recStart(id, { cols, rows, cwd, theme }) {
-  if (!recEnabled()) return;
-  try {
-    const dir = REC_DIR();
-    fs.mkdirSync(dir, { recursive: true });
-    recPrune();
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = path.join(dir, `${stamp}-${id}.cast`);
-    const stream = fs.createWriteStream(file, { flags: 'a' });
-    stream.on('error', () => { try { recorders.delete(id); } catch { /* */ } }); // 盘满/权限等：自废，不连累终端
-    const header = {
-      version: 2, width: cols || 80, height: rows || 24,
-      timestamp: Math.floor(Date.now() / 1000), env: { TERM: 'xterm-256color' },
-      // fanbox 私有元信息：回放/列表用，asciinema 标准解析器会忽略未知字段
-      fanbox: { cwd: cwd || '', cols: cols || 80, rows: rows || 24, startedAt: Date.now(), theme: theme || '' },
-    };
-    stream.write(JSON.stringify(header) + '\n');
-    recorders.set(id, { stream, start: Date.now(), path: file });
-  } catch { /* 录制失败静默自废 */ }
-}
-function recEvent(id, code, data) {
-  const r = recorders.get(id);
-  if (!r) return;
-  try { r.stream.write(JSON.stringify([(Date.now() - r.start) / 1000, code, data]) + '\n'); }
-  catch { /* */ }
-}
-function recStop(id) {
-  const r = recorders.get(id);
-  if (!r) return;
-  recorders.delete(id);
-  try { r.stream.end(); } catch { /* */ }
-}
-
 // ---------- 终端 IPC（node-pty）----------
-ipcMain.handle('pty:spawn', (e, { id, cwd, cols, rows, theme }) => {
+ipcMain.handle('pty:spawn', (e, { id, cwd, cols, rows }) => {
   if (!pty) return { ok: false, error: 'node-pty 未编译，跑：npm run rebuild' };
   const shellPath = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
   const startCwd = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
@@ -524,15 +465,12 @@ ipcMain.handle('pty:spawn', (e, { id, cwd, cols, rows, theme }) => {
   } catch (err) { return { ok: false, error: err.message }; }
   terminals.set(id, p);
   refreshLidGuard(); // 开关开着时，第一个终端起来即生效
-  recStart(id, { cols, rows, cwd: startCwd, theme });
   p.onData((data) => {
     if (win && !win.isDestroyed()) win.webContents.send('pty:data', { id, data });
-    recEvent(id, 'o', data);
   });
   p.onExit(({ exitCode }) => {
     terminals.delete(id);
     refreshLidGuard(); // 最后一个终端退出即恢复休眠
-    recStop(id);
     if (win && !win.isDestroyed()) win.webContents.send('pty:exit', { id, exitCode });
   });
   return { ok: true, cwd: startCwd };
@@ -589,142 +527,9 @@ ipcMain.handle('drop:copy-into', (e, { srcPath, dir }) => {
   } catch (err) { return { ok: false, error: err.message }; }
 });
 
-ipcMain.on('pty:input', (e, { id, data }) => { const p = terminals.get(id); if (p) { p.write(data); recEvent(id, 'i', data); } });
-ipcMain.on('pty:resize', (e, { id, cols, rows }) => { const p = terminals.get(id); if (p) { try { p.resize(cols, rows); } catch { /* */ } recEvent(id, 'r', `${cols}x${rows}`); } });
-ipcMain.on('pty:kill', (e, { id }) => { const p = terminals.get(id); if (p) { try { p.kill(); } catch { /* */ } terminals.delete(id); refreshLidGuard(); recStop(id); } });
-
-// ---------- 录制文件管理 IPC ----------
-// 列表：读每个 .cast 的头行拿元信息 + 文件大小/时长（末事件时间），按新→旧。失败的文件跳过不报错。
-ipcMain.handle('rec:list', () => {
-  try {
-    const dir = REC_DIR();
-    if (!fs.existsSync(dir)) return { ok: true, items: [] };
-    const live = new Set([...recorders.values()].map((r) => r.path));
-    const items = [];
-    for (const name of fs.readdirSync(dir)) {
-      if (!name.endsWith('.cast')) continue;
-      const full = path.join(dir, name);
-      try {
-        const st = fs.statSync(full);
-        if (!st.isFile()) continue;
-        // 「打开但没干活」的空终端会留下几百字节的壳（提示符+括号粘贴开关），是噪音：
-        // 非正在录且体量过小的直接不进列表，省得满屏空录像
-        if (st.size < 700 && !live.has(full)) continue;
-        const head = readFirstLine(full);
-        const meta = head ? JSON.parse(head) : {};
-        items.push({
-          name, path: full, size: st.size, mtime: st.mtimeMs,
-          width: meta.width || 80, height: meta.height || 24,
-          cwd: (meta.fanbox && meta.fanbox.cwd) || '',
-          startedAt: (meta.fanbox && meta.fanbox.startedAt) || (meta.timestamp ? meta.timestamp * 1000 : st.birthtimeMs),
-          duration: readLastEventTime(full, st.size), // 原始时长（末事件时间），列表里给用户选片参考
-          recording: live.has(full), // 还在录的会话
-        });
-      } catch { /* 损坏的文件跳过 */ }
-    }
-    items.sort((a, b) => b.startedAt - a.startedAt);
-    return { ok: true, items };
-  } catch (err) { return { ok: false, error: err.message, items: [] }; }
-});
-ipcMain.handle('rec:read', (e, { path: p }) => {
-  try {
-    if (!isInRecDir(p)) return { ok: false, error: '非录制目录' };
-    return { ok: true, text: fs.readFileSync(p, 'utf8') };
-  } catch (err) { return { ok: false, error: err.message }; }
-});
-ipcMain.handle('rec:delete', (e, { path: p }) => {
-  try {
-    if (!isInRecDir(p)) return { ok: false, error: '非录制目录' };
-    fs.rmSync(p, { force: true });
-    return { ok: true };
-  } catch (err) { return { ok: false, error: err.message }; }
-});
-ipcMain.handle('rec:reveal', (e, { path: p }) => {
-  try { shell.showItemInFolder(isInRecDir(p) ? p : REC_DIR()); return { ok: true }; }
-  catch (err) { return { ok: false, error: err.message }; }
-});
-// 把导出好的视频/GIF 字节落进录制目录旁，返回真实路径供「在访达显示」
-ipcMain.handle('rec:save-export', (e, { name, buf }) => {
-  try {
-    const dir = path.join(REC_DIR(), 'exports');
-    fs.mkdirSync(dir, { recursive: true });
-    const safe = String(name || 'export.webm').replace(/[/\\:]/g, '_');
-    const dest = uniqueDest(path.join(dir, safe));
-    fs.writeFileSync(dest, Buffer.from(buf));
-    return { ok: true, path: dest };
-  } catch (err) { return { ok: false, error: err.message }; }
-});
-// 导出：渲染层录出的永远是 WebM；要 MP4/GIF 就用本机 ffmpeg 转一道（检测不到 ffmpeg 优雅退回 WebM）。
-function findFfmpeg() {
-  for (const c of ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg']) { try { if (fs.existsSync(c)) return c; } catch { /* */ } }
-  return null;
-}
-ipcMain.handle('rec:export', async (e, { name, buf, format }) => {
-  const { execFile } = require('child_process');
-  const crypto = require('crypto');
-  try {
-    const dir = path.join(REC_DIR(), 'exports');
-    fs.mkdirSync(dir, { recursive: true });
-    const base = String(name || 'export').replace(/[/\\:]/g, '_').replace(/\.[a-z0-9]+$/i, '').slice(0, 120);
-    const tmp = path.join(dir, '.tmp-' + process.pid + '-' + crypto.randomBytes(3).toString('hex') + '.webm');
-    fs.writeFileSync(tmp, Buffer.from(buf));
-    const saveWebm = (reason) => { const d = uniqueDest(path.join(dir, base + '.webm')); fs.renameSync(tmp, d); return { ok: true, path: d, format: 'webm', fellBack: reason || null }; };
-    if (format === 'webm') return saveWebm();
-    const ff = findFfmpeg();
-    if (!ff) return saveWebm('未检测到 ffmpeg，已存 WebM');
-    const run = (args) => new Promise((res, rej) => execFile(ff, args, { timeout: 180000 }, (err, so, se) => (err ? rej(new Error((se || err.message || '').slice(0, 300))) : res())));
-    try {
-      if (format === 'mp4') {
-        const dest = uniqueDest(path.join(dir, base + '.mp4'));
-        // 偶数宽高（yuv420p 要求）+ faststart（边下边播）
-        await run(['-y', '-i', tmp, '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dest]);
-        fs.rmSync(tmp, { force: true });
-        return { ok: true, path: dest, format: 'mp4' };
-      }
-      if (format === 'gif') {
-        const dest = uniqueDest(path.join(dir, base + '.gif'));
-        const pal = tmp + '.png';
-        // 两遍调色板，GIF 才不糊不抖；宽度封到 900，15fps，体积友好
-        await run(['-y', '-i', tmp, '-vf', 'fps=15,scale=900:-1:flags=lanczos,palettegen=stats_mode=diff', pal]);
-        await run(['-y', '-i', tmp, '-i', pal, '-lavfi', 'fps=15,scale=900:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3', dest]);
-        fs.rmSync(tmp, { force: true }); fs.rmSync(pal, { force: true });
-        return { ok: true, path: dest, format: 'gif' };
-      }
-    } catch (convErr) { try { return saveWebm('转码失败（' + convErr.message + '），已存 WebM'); } catch { /* */ } }
-    return saveWebm();
-  } catch (err) { return { ok: false, error: err.message }; }
-});
-function isInRecDir(p) {
-  try { const r = path.resolve(REC_DIR()); return p && path.resolve(p).startsWith(r + path.sep); }
-  catch { return false; }
-}
-// 只读文件头一行（.cast 头），不把整个大文件读进内存
-function readFirstLine(file) {
-  const fd = fs.openSync(file, 'r');
-  try {
-    const buf = Buffer.alloc(8192);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    const s = buf.slice(0, n).toString('utf8');
-    const nl = s.indexOf('\n');
-    return nl >= 0 ? s.slice(0, nl) : s;
-  } finally { fs.closeSync(fd); }
-}
-// 读文件尾，取最后一条事件的时间戳 = 原始时长（不把大文件整读进内存）
-function readLastEventTime(file, size) {
-  try {
-    const len = Math.min(4096, size);
-    const fd = fs.openSync(file, 'r');
-    try {
-      const buf = Buffer.alloc(len);
-      fs.readSync(fd, buf, 0, len, Math.max(0, size - len));
-      const lines = buf.toString('utf8').split('\n').map((l) => l.trim()).filter(Boolean);
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try { const v = JSON.parse(lines[i]); if (Array.isArray(v) && typeof v[0] === 'number') return v[0]; } catch { /* 末行可能被截断，往前找 */ }
-      }
-    } finally { fs.closeSync(fd); }
-  } catch { /* */ }
-  return 0;
-}
+ipcMain.on('pty:input', (e, { id, data }) => { const p = terminals.get(id); if (p) p.write(data); });
+ipcMain.on('pty:resize', (e, { id, cols, rows }) => { const p = terminals.get(id); if (p) { try { p.resize(cols, rows); } catch { /* */ } } });
+ipcMain.on('pty:kill', (e, { id }) => { const p = terminals.get(id); if (p) { try { p.kill(); } catch { /* */ } terminals.delete(id); refreshLidGuard(); } });
 
 // lsof 在非 UTF-8 locale 下会把中文路径按字节转义成 \xe8 字面量（GUI 启动的 app 不继承 shell 的 locale，
 // 正中这个坑：标签标题乱码、双击定位失效）。调 lsof 时显式给 UTF-8 locale，这里再留一层 \xNN 解码兜底

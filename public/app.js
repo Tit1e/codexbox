@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 index.html DOM、i18n.js、服务端 HTTP API、xterm/Monaco/Milkdown 浏览器全局对象和 Electron preload 桥接
- * [OUTPUT]: 对外提供 FanBox 文件管理、预览编辑、内嵌终端、agent 和全局交互
+ * [OUTPUT]: 对外提供 FanBox 文件管理、预览编辑、内嵌终端、文件变更时间轴、agent 和全局交互
  * [POS]: public 模块的渲染层主入口，集中编排页面状态、视图和桌面能力
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -213,15 +213,6 @@ function fmtSize(n) {
   let i = 0; let v = n;
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
   return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${u[i]}`;
-}
-// 秒 → 人话时长（录像列表用）：93→「1分33秒」、5400→「1小时30分」、20→「20秒」
-function fmtDur(sec) {
-  sec = Math.round(sec || 0);
-  if (sec < 60) return sec + '秒';
-  const m = Math.floor(sec / 60), s = sec % 60;
-  if (m < 60) return s ? `${m}分${s}秒` : `${m}分`;
-  const h = Math.floor(m / 60), mm = m % 60;
-  return mm ? `${h}小时${mm}分` : `${h}小时`;
 }
 function fmtTime(ms) {
   if (!ms) return '';
@@ -2340,7 +2331,6 @@ function bindEvents() {
     term.toggleMax();
   });
   $('#term-dock').onclick = () => term.setDock(term.dock === 'bottom' ? 'right' : 'bottom');
-  $('#term-replay').onclick = () => player.open();
   const muteBtn = $('#term-mute');
   const syncMute = () => { muteBtn.textContent = state.muted ? '🔕' : '🔔'; muteBtn.title = state.muted ? '提示音已关（点击开启）' : '提示音已开（点击静音）'; };
   syncMute();
@@ -2453,17 +2443,7 @@ function bindEvents() {
   $('#cmdk-input').oninput = (e) => cmdk.search(e.target.value);
   $('#cmdk').onclick = (e) => { if (e.target.id === 'cmdk') cmdk.close(); };
 
-  // 启动必为干净态：录像弹窗永远不在 app 打开时默认显示（HTML 已带 hidden，这里再兜一道）
-  try { $('#replay-overlay').classList.add('hidden'); } catch { /* */ }
-  // 录像弹窗的「保命逃生口」：不管 player 内部状态坏没坏，ESC 一定先把弹窗 DOM 藏掉，绝不困住用户
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#replay-overlay').classList.contains('hidden')) {
-      $('#replay-overlay').classList.add('hidden');
-      try { player.close(); } catch { /* player 坏了也没关系，上面已经把弹窗藏了 */ }
-    }
-  }, true);
-  document.addEventListener('keydown', (e) => {
-    if (!$('#replay-overlay').classList.contains('hidden')) return; // 录像回放开着时，交给它自己的快捷键
     if (e.key === 'Escape' && $('#context-menu')) { closeContextMenu(); return; }
     const cmdkOpen = !$('#cmdk').classList.contains('hidden');
     const lbOpen = !!document.querySelector('.lightbox');
@@ -2525,335 +2505,6 @@ function applyTheme(skin, rerender = true) {
   }
 }
 
-// ---------- 终端录像回放（黑匣子的播放端）----------
-// 保真铁律：用和 live 终端完全相同的 xterm 配置（主题/字体/unicode11/对比度）回放原始字节流，
-// 画面就和当时逐像素一致。时间压缩是非破坏性变换（idle 封顶 + 目标时长反推 + 倍速），原始 .cast 不动。
-const player = {
-  xterm: null, raw: [], timeline: [], duration: 0, currentTime: 0, cursor: 0,
-  playing: false, _raf: 0, _wallStart: 0, _host: null, _canvasOk: false,
-  initCols: 80, initRows: 24, cols: 80, rows: 24, current: null, _wired: false,
-  opts: { idleCap: 1, target: 60, speed: 1 },
-
-  async open() {
-    const ov = $('#replay-overlay');
-    if (!ov) return;
-    if (!ov.classList.contains('hidden')) return; // 已打开，别重复绑监听（否则 keydown/resize 泄漏）
-    ov.classList.remove('hidden');
-    this._host = $('#replay-host');
-    if (!this._wired) this.wire();
-    this._onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); this.close(); }
-      else if (e.key === ' ' && this.timeline.length && !/SELECT|INPUT/.test((e.target.tagName || ''))) { e.preventDefault(); this.toggle(); }
-    };
-    this._onResize = () => { clearTimeout(this._resizeT); this._resizeT = setTimeout(() => this.rescale(), 120); };
-    document.addEventListener('keydown', this._onKey, true);
-    window.addEventListener('resize', this._onResize);
-    await this.loadList();
-  },
-  close() {
-    // 铁律：关闭永远无条件成功。先把弹窗藏掉（用户立刻解脱），再做清理；任何一步抛错都不许挡住关闭。
-    try { $('#replay-overlay').classList.add('hidden'); } catch { /* */ }
-    this._exporting = false; // 导出中也允许关：终止导出，不再阻塞
-    try { this.pause(); } catch { /* */ }
-    try { if (this._onKey) document.removeEventListener('keydown', this._onKey, true); } catch { /* */ }
-    try { if (this._onResize) window.removeEventListener('resize', this._onResize); } catch { /* */ }
-    try { this.teardownTerm(); } catch { /* */ }
-    this.current = null;
-  },
-  teardownTerm() {
-    if (this.xterm) { try { this.xterm.dispose(); } catch { /* */ } this.xterm = null; }
-    if (this._host) this._host.innerHTML = '';
-  },
-  wire() {
-    this._wired = true;
-    $('#replay-close').onclick = () => this.close();
-    $('#replay-overlay').addEventListener('mousedown', (e) => { if (e.target.id === 'replay-overlay') this.close(); });
-    $('#rp-play').onclick = () => this.toggle();
-    // 拖动 seek 用 rAF 节流：大录像每次 seek 是 O(N) 重放，不节流会卡死主线程
-    $('#rp-seek').addEventListener('input', (e) => { this.pause(); this._seekTo = this.duration * (e.target.value / 1000); if (this._seekRAF) return; this._seekRAF = requestAnimationFrame(() => { this._seekRAF = 0; this.seekTo(this._seekTo); }); });
-    $('#rp-idle').addEventListener('change', (e) => { this.opts.idleCap = parseFloat(e.target.value); this.recompute(); this.seekTo(this.firstAt); });
-    $('#rp-target').addEventListener('change', (e) => { this.opts.target = e.target.value ? parseFloat(e.target.value) : null; this.recompute(); this.seekTo(this.firstAt); });
-    $('#rp-speed').addEventListener('change', (e) => { this.opts.speed = parseFloat(e.target.value); this.recompute(); this.seekTo(this.firstAt); });
-    $('#rp-export').onclick = () => this.exportVideo();
-  },
-  async loadList() {
-    const box = $('#replay-list');
-    if (!window.fanboxRec) { box.innerHTML = '<div class="replay-empty-list">录像功能仅在桌面 App 内可用。</div>'; return; }
-    const r = await window.fanboxRec.list().catch(() => null);
-    const items = (r && r.items) || [];
-    if (!items.length) { box.innerHTML = '<div class="replay-empty-list">还没有录像。<br>打开一个终端跑跑 agent，<br>这里会自动出现黑匣子。</div>'; return; }
-    box.innerHTML = '';
-    items.forEach((it) => {
-      const el = document.createElement('div');
-      el.className = 'rp-item' + (this.current && this.current.path === it.path ? ' active' : '');
-      const when = new Date(it.startedAt || it.mtime);
-      const title = (it.cwd ? baseOf(it.cwd) : '') || it.name.replace(/\.cast$/, '');
-      const dur = it.duration ? fmtDur(it.duration) + ' · ' : '';
-      el.innerHTML = `<div class="rp-item-top">${it.recording ? '<span class="rp-dot-live" title="正在录"></span>' : ''}<span>${escapeHtml(title)}</span><span class="rp-item-del" title="删除">✕</span></div>`
-        + `<div class="rp-item-sub">${dur}${when.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${fmtSize(it.size)}</div>`;
-      el.querySelector('.rp-item-del').onclick = async (ev) => { ev.stopPropagation(); if (await confirmDialog('删除这段录像？')) { await window.fanboxRec.remove(it.path); this.loadList(); } };
-      el.onclick = () => this.select(it);
-      box.appendChild(el);
-    });
-  },
-  async select(it) {
-    if (this._exporting) { toast('导出进行中，请稍候…', true); return; } // 导出中切换会绑错画布产坏文件
-    const r = await window.fanboxRec.read(it.path).catch(() => null);
-    if (!r || !r.ok) { toast('读取录像失败', true); return; }
-    let header = null; const raw = [];
-    for (const line of r.text.split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const v = JSON.parse(line);
-        if (!header && !Array.isArray(v)) { header = v; continue; }
-        if (Array.isArray(v) && (v[1] === 'o' || v[1] === 'r')) raw.push({ t: v[0], code: v[1], data: v[2] });
-      } catch { /* 跳过坏行 */ }
-    }
-    if (!header) { toast('录像为空或损坏', true); return; }
-    this.current = it;
-    this.raw = raw;
-    this.recTheme = (header.fanbox && header.fanbox.theme) || ''; // 录制时的皮肤：回放用它，颜色才和当时一致
-    this.initCols = this.cols = header.width || 80;
-    this.initRows = this.rows = header.height || 24;
-    $('#replay-empty').style.display = 'none';
-    $('#replay-controls').classList.remove('hidden');
-    this.loadList(); // 刷新选中态
-    this.buildTerm(this.initCols, this.initRows);
-    this.recompute();
-    this.seekTo(this.firstAt); // 选中即停在第一帧内容上，不再是空屏
-    setTimeout(() => { if (this.current === it) this.play(); }, 400); // 自动播放：选中即「活」起来
-  },
-  buildTerm(cols, rows) {
-    this.teardownTerm();
-    const x = new window.Terminal({
-      fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--font-term').trim() || 'monospace',
-      fontSize: 14, lineHeight: 1.2, cursorBlink: false, theme: (term.themes[this.recTheme] || term.theme()), scrollback: 0,
-      allowProposedApi: true, minimumContrastRatio: 4.5, cols, rows,
-    });
-    if (!window.__noUnicode11 && window.Unicode11Addon) {
-      try { const U = window.Unicode11Addon.Unicode11Addon || window.Unicode11Addon; x.loadAddon(new U()); x.unicode.activeVersion = '11'; } catch { /* */ }
-    }
-    x.open(this._host);
-    this._canvasOk = false;
-    if (!window.__noWebgl && window.WebglAddon) {
-      try { const W = window.WebglAddon.WebglAddon || window.WebglAddon; const w = new W(); w.onContextLoss(() => { try { w.dispose(); } catch { /* */ } }); x.loadAddon(w); this._canvasOk = true; } catch { /* 回退 DOM renderer：回放仍可，导出降级 */ }
-    }
-    this.xterm = x;
-    requestAnimationFrame(() => this.rescale());
-  },
-  // 不改 cols×rows（保证折行和当时一致），用 CSS transform 缩放整块以适配舞台
-  rescale() {
-    const screen = $('#replay-screen'), host = this._host;
-    if (!screen || !host || !this.xterm) return;
-    const el = host.querySelector('.xterm');
-    if (!el) return;
-    host.style.transform = 'none';
-    const natW = el.offsetWidth, natH = el.offsetHeight;
-    if (!natW || !natH) return;
-    const scale = Math.min((screen.clientWidth - 32) / natW, (screen.clientHeight - 32) / natH);
-    host.style.transform = `scale(${Math.max(0.1, scale)})`;
-  },
-  // 非破坏性时间变换。要害：压「等待」不压「流式输出」——把 2h 压成 1min 时，
-  // 被牺牲的应该是 agent 思考/装依赖的长静默，而连续吐字的节奏要原样保留，否则糊成闪屏。
-  recompute() {
-    const STREAM = 0.25; // ≤这个间隔算「流式输出节奏」，保留；更大的算「等待」，可压
-    const cap = this.opts.idleCap || 9999;
-    const target = this.opts.target;
-    const manual = this.opts.speed || 1;
-    // 1) 先按 idleCap 压每个间隔（封顶长等待）
-    let prev = 0; const gaps = [];
-    for (const e of this.raw) { let g = e.t - prev; prev = e.t; if (g < 0) g = 0; if (g > cap) g = cap; gaps.push({ g, code: e.code, data: e.data }); }
-    // 2) 设了目标时长：把「等待段」等比压缩去凑目标，「流式段」原样不动；
-    //    若光流式段就超目标，宁可超时也保可读（不把连续输出提速成闪屏）
-    if (target) {
-      let streamSum = 0, idleSum = 0;
-      for (const x of gaps) { if (x.g <= STREAM) streamSum += x.g; else idleSum += x.g; }
-      const idleBudget = Math.max(0, target - streamSum);
-      if (idleSum > idleBudget && idleSum > 0) { const k = idleBudget / idleSum; for (const x of gaps) if (x.g > STREAM) x.g *= k; }
-    }
-    // 3) 手动倍速叠加，累加成时间轴
-    let acc = 0; const tl = [];
-    for (const x of gaps) { acc += x.g / manual; tl.push({ at: acc, code: x.code, data: x.data }); }
-    this.timeline = tl;
-    this.duration = acc;
-    const fo = tl.find((x) => x.code === 'o'); // 第一帧有内容的时刻：避开开头空白，选中即见画面
-    this.firstAt = fo ? fo.at : 0;
-    this.updateTime();
-  },
-  apply(e) {
-    if (!this.xterm) return; // 回放中被关闭/切换会 dispose xterm，这里要挡住空引用
-    if (e.code === 'o') this.xterm.write(e.data);
-    else if (e.code === 'r') { const m = /^(\d+)x(\d+)$/.exec(e.data); if (m) { try { this.xterm.resize(+m[1], +m[2]); } catch { /* */ } requestAnimationFrame(() => this.rescale()); } }
-  },
-  seekTo(t) {
-    if (!this.xterm) return;
-    t = Math.max(0, Math.min(t, this.duration || 0));
-    // 后退才从头重放（终端是有状态的，回退必须重建）；前进只从当前 cursor 增量喂，
-    // 这样拖动长录像的进度条不会每次都 O(N) 全量重放卡死
-    if (t < this.currentTime - 1e-6) {
-      try { this.xterm.reset(); this.xterm.resize(this.initCols, this.initRows); } catch { /* */ }
-      this.cursor = 0;
-    }
-    let buf = ''; let resized = false;
-    for (; this.cursor < this.timeline.length && this.timeline[this.cursor].at <= t; this.cursor++) {
-      const e = this.timeline[this.cursor];
-      if (e.code === 'o') buf += e.data;
-      else if (e.code === 'r') { if (buf) { this.xterm.write(buf); buf = ''; } const m = /^(\d+)x(\d+)$/.exec(e.data); if (m) { try { this.xterm.resize(+m[1], +m[2]); resized = true; } catch { /* */ } } }
-    }
-    if (buf) this.xterm.write(buf);
-    if (resized) requestAnimationFrame(() => this.rescale());
-    this.currentTime = t;
-    if (this.playing) this._wallStart = performance.now() - t * 1000;
-    this.updateTime();
-  },
-  toggle() { this.playing ? this.pause() : this.play(); },
-  play() {
-    if (!this.timeline.length) return;
-    if (this.cursor >= this.timeline.length || this.currentTime >= this.duration - 1e-3) this.seekTo(0);
-    this.playing = true;
-    this._wallStart = performance.now() - this.currentTime * 1000;
-    this.setPlayIcon(true);
-    this._raf = requestAnimationFrame(() => this.tick());
-  },
-  pause() {
-    this.playing = false;
-    if (this._raf) cancelAnimationFrame(this._raf);
-    this.setPlayIcon(false);
-  },
-  tick() {
-    if (!this.playing || !this.xterm) return;
-    const now = (performance.now() - this._wallStart) / 1000;
-    while (this.cursor < this.timeline.length && this.timeline[this.cursor].at <= now) this.apply(this.timeline[this.cursor++]);
-    this.currentTime = Math.min(now, this.duration);
-    this.updateTime();
-    if (this.cursor >= this.timeline.length) { this.currentTime = this.duration; this.updateTime(); this.pause(); return; }
-    this._raf = requestAnimationFrame(() => this.tick());
-  },
-  setPlayIcon(playing) {
-    const b = $('#rp-play');
-    if (b) b.innerHTML = playing
-      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
-      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-  },
-  updateTime() {
-    const f = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-    const tEl = $('#rp-time'); if (tEl) tEl.textContent = `${f(this.currentTime)} / ${f(this.duration)}`;
-    const sk = $('#rp-seek'); if (sk && document.activeElement !== sk) sk.value = this.duration ? String(Math.round(this.currentTime / this.duration * 1000)) : 0;
-  },
-  exportVideo() { exportReplay(this); },
-  // 入口发现性：有录像时给回放按钮点一个小红点（飞行记录仪默默录了一堆，得让用户知道能回看）
-  async refreshHint() {
-    if (!window.fanboxRec) return;
-    const btn = $('#term-replay'); if (!btn) return;
-    try { const r = await window.fanboxRec.list(); btn.classList.toggle('has-rec', !!(r && r.items && r.items.length)); } catch { /* */ }
-  },
-};
-
-// 导出：直接对回放用的 xterm canvas 做 captureStream + MediaRecorder——
-// 录的就是播放器画面本身，和你看到的逐像素一致，零外部依赖。手动 requestFrame 保证静止段也出帧。
-async function exportReplay(p) {
-  if (!p.xterm || !p.timeline.length) { toast('先在左侧选一段录像', true); return; }
-  if (!p._canvasOk) { toast('导出需要 WebGL 渲染，当前不可用', true); return; }
-  if (!window.MediaRecorder) { toast('当前环境不支持录制导出', true); return; }
-  // 选 WebGL 渲染那块画布（另一块 xterm-link-layer 是空覆盖层）。WebGL 不保留 drawing buffer，
-  // 必须用 captureStream(fps) 的「自动模式」在合成器层面取帧——手动 requestFrame 取到的是空白。
-  const canvases = [...p._host.querySelectorAll('canvas')];
-  const srcCanvas = canvases.find((c) => { try { return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }) || canvases[canvases.length - 1];
-  if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) { toast('找不到画布，无法导出', true); return; }
-  const cw = srcCanvas.width, ch = srcCanvas.height;
-  // WebGL 画布不能直接 drawImage（读回是空白），先 captureStream 喂给 <video>，再画进带 macOS 外框的合成画布
-  let srcStream;
-  try { srcStream = srcCanvas.captureStream(30); } catch { toast('画布捕获失败', true); return; }
-  const video = document.createElement('video');
-  video.muted = true; video.playsInline = true; video.srcObject = srcStream;
-  // 外框几何（设备像素，按宽度等比缩放），配色取录像当时的皮肤
-  const s = Math.max(0.6, cw / 900);
-  const titleH = Math.round(40 * s), pad = Math.round(44 * s), radius = Math.round(11 * s);
-  const comp = document.createElement('canvas');
-  comp.width = cw + pad * 2; comp.height = ch + titleH + pad * 2;
-  const ctx = comp.getContext('2d');
-  const theme = term.themes[p.recTheme] || term.theme();
-  const termBg = theme.background || '#0b0c0a', fg = theme.foreground || '#cccccc';
-  const lightTheme = hexLum(termBg) > 0.5;
-  const backdrop = lightTheme ? '#d6d0c4' : '#16181c';
-  const title = (p.current && p.current.cwd && baseOf(p.current.cwd)) || '终端录像';
-  const fontFam = getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim() || 'sans-serif';
-  const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
-  const drawFrame = () => {
-    ctx.fillStyle = backdrop; ctx.fillRect(0, 0, comp.width, comp.height);
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.30)'; ctx.shadowBlur = 30 * s; ctx.shadowOffsetY = 12 * s;
-    ctx.fillStyle = termBg; rr(pad, pad, cw, titleH + ch, radius); ctx.fill(); ctx.restore();
-    ctx.save(); rr(pad, pad, cw, titleH + ch, radius); ctx.clip();
-    ctx.fillStyle = lightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)'; ctx.fillRect(pad, pad, cw, titleH);
-    const ly = pad + titleH / 2, lr = Math.round(6 * s); let lx = pad + Math.round(22 * s);
-    for (const col of ['#ff5f57', '#febc2e', '#28c840']) { ctx.beginPath(); ctx.fillStyle = col; ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.fill(); lx += Math.round(20 * s); }
-    ctx.fillStyle = fg; ctx.globalAlpha = 0.68; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `${Math.round(15 * s)}px ${fontFam}`; ctx.fillText(title, pad + cw / 2, ly + 1); ctx.globalAlpha = 1;
-    try { ctx.drawImage(video, pad, pad + titleH, cw, ch); } catch { /* video 尚无帧 */ }
-    ctx.restore();
-  };
-  let framePump = 0; const pump = () => { drawFrame(); framePump = requestAnimationFrame(pump); };
-  let stream;
-  try { stream = comp.captureStream(30); } catch { toast('合成画布捕获失败', true); return; }
-  // 渲染层固定录 WebM（Electron 的 MediaRecorder 最稳的就是 vp9/webm），mp4/gif 交给主进程 ffmpeg 转
-  const mime = ['video/webm;codecs=vp9', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) || 'video/webm';
-  const chunks = [];
-  let mr;
-  try { mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10000000 }); }
-  catch { toast('无法初始化录制器', true); return; }
-  mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-  const stopped = new Promise((res) => { mr.onstop = res; });
-  const btn = $('#rp-export'); const label = btn.textContent;
-  p._exporting = true; // 导出期间禁止切换/关闭，避免绑错画布产坏文件
-  btn.disabled = true;
-  try {
-    p.pause(); p.seekTo(0);
-    try { await video.play(); } catch { /* */ }
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // 等画布稳定
-    pump(); // 开始把 video 画进外框
-    mr.start(100); // timeslice：周期性产出数据块，短录像也不丢
-    p.play();
-    // 导出是实时录屏（播一遍就是多久），进度条给用户反馈，别让人以为卡死
-    const prog = setInterval(() => { btn.textContent = '录制中 ' + Math.min(99, Math.round(p.currentTime / (p.duration || 1) * 100)) + '%'; }, 200);
-    await new Promise((res) => { const iv = setInterval(() => { if (!p.playing) { clearInterval(iv); res(); } }, 80); });
-    clearInterval(prog);
-    await new Promise((r) => setTimeout(r, 500)); // 末帧多停一拍
-    try { mr.stop(); } catch { /* */ }
-    await stopped;
-    cancelAnimationFrame(framePump);
-    try { stream.getTracks().forEach((t) => t.stop()); srcStream.getTracks().forEach((t) => t.stop()); } catch { /* */ }
-    try { video.pause(); video.srcObject = null; } catch { /* */ }
-    if (!chunks.length) { toast('没有捕获到画面（导出需要 WebGL）', true); return; }
-    const fmt = ($('#rp-format') && $('#rp-format').value) || 'mp4';
-    btn.textContent = fmt === 'webm' ? '保存中…' : '转码中…';
-    const blob = new Blob(chunks, { type: mime });
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    const tag = (p.current && p.current.cwd && baseOf(p.current.cwd)) || 'session';
-    const name = `终端录像-${tag}-${fmtStamp()}`;
-    // 渲染层永远产 WebM，交给主进程按 fmt 用 ffmpeg 转 mp4/gif（无 ffmpeg 自动退回 webm）
-    const r = await window.fanboxRec.export(name, buf, fmt).catch(() => null);
-    if (r && r.ok) { toast('已导出 ' + baseOf(r.path) + (r.fellBack ? '（' + r.fellBack + '）' : '') + '，在访达打开'); window.fanboxRec.reveal(r.path); }
-    else { toast('导出失败' + (r && r.error ? '：' + r.error : ''), true); }
-  } finally {
-    try { cancelAnimationFrame(framePump); } catch { /* */ }
-    try { stream.getTracks().forEach((t) => t.stop()); srcStream.getTracks().forEach((t) => t.stop()); } catch { /* */ }
-    try { video.pause(); video.srcObject = null; } catch { /* */ }
-    p._exporting = false; btn.disabled = false; btn.textContent = label;
-  }
-}
-// 简易相对亮度（判断皮肤深浅，给外框选底色）
-function hexLum(hex) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
-  if (!m) return 0.2;
-  const n = parseInt(m[1], 16);
-  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-}
-function fmtStamp() {
-  const d = new Date();
-  const p2 = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-}
-
 // ---------- 内嵌终端（仅桌面 app；浏览器版优雅降级）----------
 // agent「等你拍板」界面特征（claude code 2.1.x / codex 0.13x 实测文案，宁缺勿滥：
 // 不命中只是退化成「任务完成」标题，不会漏响）
@@ -2893,7 +2544,6 @@ const term = {
     if (!this.sessions.length) this.newTab();
     else this.fitActive();
     $('#btn-terminal').classList.add('active');
-    player.refreshHint(); // 有录像就给回放按钮点红点，提升发现性
     localStorage.setItem('fb_term_open', '1');
     if (!localStorage.getItem('fb_term_draghint')) { localStorage.setItem('fb_term_draghint', '1'); setTimeout(() => toast('提示：把左侧文件 / 文件夹拖进终端，即插入路径喂给 agent'), 700); }
   },
@@ -3149,7 +2799,7 @@ const term = {
     this.sessions.push(sess);
     this.activate(id);
     updateWatches(); // 新终端的项目目录也纳入监听
-    const r = await window.fanboxPty.spawn({ id, cwd: startDir, cols: xterm.cols, rows: xterm.rows, theme: state.theme });
+    const r = await window.fanboxPty.spawn({ id, cwd: startDir, cols: xterm.cols, rows: xterm.rows });
     if (!r.ok) { sess.dead = true; xterm.write('\r\n  \x1b[31m终端启动失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || startDir; // 末尾 renderTabs 统一带上 cwd 重画
     xterm.onData((d) => {

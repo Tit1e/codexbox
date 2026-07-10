@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron 的 contextBridge、ipcRenderer 和 webUtils 受控系统能力
- * [OUTPUT]: 对外提供 fanboxPty、fanboxRec、fanboxFs、fanboxClipboard、fanboxDrop、fanboxShot、fanboxUpdate、fanboxWin 与 fanboxEnv
+ * [OUTPUT]: 对外提供 fanboxPty、fanboxFs、fanboxClipboard、fanboxDrop、fanboxShot、fanboxUpdate、fanboxWin 与 fanboxEnv
  * [POS]: electron 模块的安全桥接层，在 contextIsolation 下连接渲染进程与主进程 IPC
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -16,15 +16,6 @@ contextBridge.exposeInMainWorld('fanboxPty', {
   proc: (id) => ipcRenderer.invoke('pty:proc', { id }),
   onData: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('pty:data', h); return () => ipcRenderer.removeListener('pty:data', h); },
   onExit: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('pty:exit', h); return () => ipcRenderer.removeListener('pty:exit', h); },
-});
-
-contextBridge.exposeInMainWorld('fanboxRec', {
-  list: () => ipcRenderer.invoke('rec:list'),
-  read: (path) => ipcRenderer.invoke('rec:read', { path }),
-  remove: (path) => ipcRenderer.invoke('rec:delete', { path }),
-  reveal: (path) => ipcRenderer.invoke('rec:reveal', { path }),
-  saveExport: (name, buf) => ipcRenderer.invoke('rec:save-export', { name, buf }),
-  export: (name, buf, format) => ipcRenderer.invoke('rec:export', { name, buf, format }), // WebM 字节 → 按 format 转 mp4/gif（无 ffmpeg 退回 webm）
 });
 
 contextBridge.exposeInMainWorld('fanboxFs', {

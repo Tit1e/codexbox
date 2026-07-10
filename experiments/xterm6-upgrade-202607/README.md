@@ -1,3 +1,9 @@
+<!--
+[INPUT]: 依赖 public/vendor/xterm 的现役版本与 public/app.js 的 xterm 主终端创建路径
+[OUTPUT]: 对外提供 xterm 6.0 升级来源、接入检查单与主终端回归范围
+[POS]: experiments/xterm6-upgrade-202607 的升级存档说明，与诊断探针和自动化验收脚本配套
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+-->
 # xterm 6.0 升级暂存（2026-07 下载，同日已接入）
 
 中文乱码（WebGL 字形图集损坏）三方案里的方案二：升级渲染栈到上游修复版。
@@ -23,5 +29,5 @@
    6.0 重写了 Viewport（上游 #5339 已修），这两处依赖的 `_core.viewport.syncScrollArea` 私有 API 在 6.0 可能已不存在——都是可选链调用不会炸，但该删。
 4. 6.0 是大版本，过一遍上游 release notes / 迁移说明，重点核对：
    - `allowProposedApi`、`unicode.activeVersion`、`minimumContrastRatio`、`macOptionClickForcesSelection` 等现用 options 是否有变
-   - 回放播放器（app.js `buildTerm`）和主终端两处创建路径都要测
-5. 回归测试：中文输入法候选词、claude/codex TUI 重绘、滚动到底、⌘+/- 字号缩放、换肤、录像回放、GIF 导出。
+   - 主终端的 xterm 创建路径要测
+5. 回归测试：中文输入法候选词、claude/codex TUI 重绘、滚动到底、⌘+/- 字号缩放、换肤。
