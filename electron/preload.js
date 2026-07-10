@@ -13,7 +13,6 @@ contextBridge.exposeInMainWorld('fanboxPty', {
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', { id, cols, rows }),
   kill: (id) => ipcRenderer.send('pty:kill', { id }),
   cwd: (id) => ipcRenderer.invoke('pty:cwd', { id }),
-  proc: (id) => ipcRenderer.invoke('pty:proc', { id }),
   onData: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('pty:data', h); return () => ipcRenderer.removeListener('pty:data', h); },
   onExit: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('pty:exit', h); return () => ipcRenderer.removeListener('pty:exit', h); },
 });

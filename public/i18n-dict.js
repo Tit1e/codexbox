@@ -242,11 +242,11 @@ window.FANBOX_DICT = {
   '开始使用': 'Get started',
 
   // ---------- 终端 ----------
-  '启动 Codex：空闲终端就地启动，正跑着任务则新开标签': 'Launch Codex: starts in the idle terminal, or opens a new tab if one is busy',
-  '继续当前终端目录最近的 Codex 会话': 'Continue the latest Codex session in this terminal folder',
-  '启动新的 Codex 会话': 'Start a new Codex session',
+  '启动 Codex：始终在左侧当前目录新建终端标签': 'Launch Codex: always open a new terminal tab in the current folder on the left',
+  '在左侧当前目录新建终端标签并继续最近的 Codex 会话': 'Open a new terminal tab in the current folder on the left and continue its latest Codex session',
+  '在左侧当前目录新建终端标签并启动新的 Codex 会话': 'Open a new terminal tab in the current folder on the left and start a new Codex session',
   '终端设置': 'Terminal settings',
-  '一键启动时继续当前终端目录最近的 Codex 会话': 'Continue the latest Codex session in the current terminal folder when using quick launch',
+  '一键启动时继续左侧当前目录最近的 Codex 会话': 'Continue the latest Codex session in the current folder on the left when using quick launch',
   '继续最近 Codex 会话': 'Continue latest Codex session',
   'Codex 等待确认或任务完成时播放提示音': 'Play a chime when Codex needs approval or finishes a task',
   'Codex 提示音': 'Codex chime',

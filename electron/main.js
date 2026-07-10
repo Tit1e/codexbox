@@ -566,12 +566,6 @@ ipcMain.handle('pty:cwd', async (e, { id }) => {
   return cwd ? { ok: true, cwd } : { ok: false };
 });
 
-// 取终端前台进程名（node-pty 维护）：判断当前是裸 shell 还是正跑着 codex 等程序
-ipcMain.handle('pty:proc', (e, { id }) => {
-  const p = terminals.get(id);
-  return p ? { ok: true, proc: p.process || '' } : { ok: false };
-});
-
 // ---------- 文件监听（agent 改文件 → 自动刷新 + 跨项目变更收件箱）----------
 // 多目录监听：浏览目录 + 每个终端会话所在的项目目录。一下午开多个项目跑 agent 时，
 // 不在前台的项目也能感知变更。前端发来期望监听集，这里做增量 diff（关掉多余、补上新增）。

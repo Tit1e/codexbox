@@ -2009,7 +2009,9 @@ function codexResumeLast() {
 }
 function syncCodexLaunchHint() {
   const btn = $('#term-codex');
-  if (btn) btn.title = codexResumeLast() ? '继续当前终端目录最近的 Codex 会话' : '启动新的 Codex 会话';
+  if (btn) btn.title = codexResumeLast()
+    ? '在左侧当前目录新建终端标签并继续最近的 Codex 会话'
+    : '在左侧当前目录新建终端标签并启动新的 Codex 会话';
 }
 const terminalSettingsPop = {
   el: null,
@@ -2024,7 +2026,7 @@ const terminalSettingsPop = {
     const pop = document.createElement('div');
     pop.className = 'terminal-settings-pop';
     pop.innerHTML = `<div class="tsp-head">终端设置</div>
-      <label class="tsp-row" title="一键启动时继续当前终端目录最近的 Codex 会话">
+      <label class="tsp-row" title="一键启动时继续左侧当前目录最近的 Codex 会话">
         <input type="checkbox" data-setting="resume-last" ${codexResumeLast() ? 'checked' : ''}>
         <span>继续最近 Codex 会话</span>
       </label>
@@ -2369,17 +2371,10 @@ const term = {
     const write = () => { if (this.active) this.input(this.active, shQuote(p) + ' '); const s = this.sessions.find((x) => x.id === this.active); if (s) s.xterm.focus(); };
     if (wasHidden) setTimeout(write, 280); else write();
   },
-  // 一键启动 Codex：当前标签是空闲 shell 就地启动；正跑着其他前台程序
-  // 则新开标签，不打断也不把命令打进别的程序里
+  // 一键启动 Codex：始终在左侧当前目录新建标签，避免复用终端时沿用错误目录
   async launchCodex() {
     if (!this.available()) { openWith(state.cwd, 'terminal'); return; } // 网页版降级到系统终端
-    let sess = null;
-    if (this.sessions.length) {
-      if ($('#terminal-panel').classList.contains('hidden')) this.open();
-      const cur = this.sessions.find((x) => x.id === this.active);
-      if (cur && !cur.dead && await this.isPlainShell(cur)) sess = cur;
-    }
-    if (!sess) sess = await this.openInDir(state.cwd); // 等 spawn 完，拿确切 session 写入
+    const sess = await this.openInDir(state.cwd); // 等 spawn 完，拿确切 session 写入
     const resumeLast = codexResumeLast();
     if (sess && !sess.dead) {
       this.input(sess.id, (resumeLast ? 'codex resume --last' : 'codex') + '\r');
@@ -2394,15 +2389,6 @@ const term = {
     const sess = await this.openInDir(dir);
     if (sess && !sess.dead) { this.input(sess.id, cmd + '\r'); sess.xterm.focus(); toast(msg || '已在终端启动'); }
     else toast('终端启动失败', true);
-  },
-  // 该会话前台是不是裸 shell？判断不了一律按「不是」处理——宁可新开标签，也不往运行中的程序里打字
-  async isPlainShell(s) {
-    try {
-      const r = await window.fanboxPty.proc(s.id);
-      if (!r || !r.ok || !r.proc) return false;
-      const name = String(r.proc).split('/').pop().replace(/^-/, '').toLowerCase();
-      return ['zsh', 'bash', 'fish', 'sh', 'dash', 'tcsh', 'nu', 'pwsh', 'powershell.exe', 'cmd.exe'].includes(name);
-    } catch { return false; }
   },
   // 把预览里选中的文字作为「上下文」喂给终端 agent：带文件出处 + 围栏，bracketed paste 防逐行误提交
   sendContext(text, srcPath) {
