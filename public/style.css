@@ -800,7 +800,7 @@ kbd {
 .term-actions .codex-launch svg, .term-actions .codex-launch img { display: block; flex: none; width: 15px; height: 15px; }
 .term-actions .codex-launch + #term-settings { margin-left: 2px; }
 
-/* 终端设置只承载渲染选项，与 Codex 启动职责分离 */
+/* 终端设置统一承载 Codex 启动、提示音和渲染偏好 */
 .terminal-settings-pop { position: fixed; z-index: 200; width: 240px; display: flex; flex-direction: column; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.32); overflow: hidden; }
 .terminal-settings-pop .tsp-head { padding: 9px 12px; font-size: 12px; font-weight: 600; color: var(--text-dim); border-bottom: 1px solid var(--border); }
 .terminal-settings-pop .tsp-row { display: flex; align-items: center; gap: 9px; padding: 9px 12px; cursor: pointer; font-size: 13px; color: var(--text); }

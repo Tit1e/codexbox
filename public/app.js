@@ -2004,6 +2004,13 @@ function bindTerminalResizer() {
 }
 
 // ---------- Codex 快速启动与终端设置 ----------
+function codexResumeLast() {
+  try { return localStorage.getItem('fb_codex_resume_last') !== '0'; } catch { return true; }
+}
+function syncCodexLaunchHint() {
+  const btn = $('#term-codex');
+  if (btn) btn.title = codexResumeLast() ? '继续当前终端目录最近的 Codex 会话' : '启动新的 Codex 会话';
+}
 const terminalSettingsPop = {
   el: null,
   toggle() { if (this.el) this.close(); else this.open(); },
@@ -2016,9 +2023,17 @@ const terminalSettingsPop = {
   open() {
     const pop = document.createElement('div');
     pop.className = 'terminal-settings-pop';
-    pop.innerHTML = `<div class="tsp-head">终端渲染</div>
+    pop.innerHTML = `<div class="tsp-head">终端设置</div>
+      <label class="tsp-row" title="一键启动时继续当前终端目录最近的 Codex 会话">
+        <input type="checkbox" data-setting="resume-last" ${codexResumeLast() ? 'checked' : ''}>
+        <span>继续最近 Codex 会话</span>
+      </label>
+      <label class="tsp-row" title="Codex 等待确认或任务完成时播放提示音">
+        <input type="checkbox" data-setting="chime" ${state.muted ? '' : 'checked'}>
+        <span>Codex 提示音</span>
+      </label>
       <label class="tsp-row" title="长时间中文输出偶发乱码时可关掉：改用兼容渲染（DOM），立即生效，稍慢但稳">
-        <input type="checkbox" ${(() => { try { return localStorage.getItem('fanbox.noWebgl') === '1' ? '' : 'checked'; } catch { return 'checked'; } })()}>
+        <input type="checkbox" data-setting="webgl" ${(() => { try { return localStorage.getItem('fanbox.noWebgl') === '1' ? '' : 'checked'; } catch { return 'checked'; } })()}>
         <span>WebGL 加速渲染</span>
       </label>`;
     document.body.appendChild(pop);
@@ -2027,7 +2042,18 @@ const terminalSettingsPop = {
     pop.style.top = Math.round(r.bottom + 6) + 'px';
     pop.style.right = Math.max(8, Math.round(window.innerWidth - r.right - 8)) + 'px';
     this.el = pop;
-    pop.querySelector('input').onchange = (ev) => {
+    pop.querySelector('[data-setting="resume-last"]').onchange = (ev) => {
+      localStorage.setItem('fb_codex_resume_last', ev.target.checked ? '1' : '0');
+      syncCodexLaunchHint();
+      toast(ev.target.checked ? '一键启动将继续最近 Codex 会话' : '一键启动将创建新的 Codex 会话');
+    };
+    pop.querySelector('[data-setting="chime"]').onchange = (ev) => {
+      state.muted = !ev.target.checked;
+      localStorage.setItem('fb_muted', state.muted ? '1' : '0');
+      if (!state.muted) playChime('tick');
+      toast(state.muted ? 'Codex 提示音已关闭' : 'Codex 提示音已开启');
+    };
+    pop.querySelector('[data-setting="webgl"]').onchange = (ev) => {
       term.setWebgl(ev.target.checked);
       toast(ev.target.checked ? 'WebGL 渲染已开启' : '已切换兼容渲染（修中文乱码）');
     };
@@ -2037,6 +2063,7 @@ const terminalSettingsPop = {
 };
 
 function bindCodexControls() {
+  syncCodexLaunchHint();
   $('#term-codex').onclick = () => term.launchCodex();
   $('#term-settings').onclick = () => terminalSettingsPop.toggle();
 }
@@ -2073,10 +2100,6 @@ function bindEvents() {
     term.toggleMax();
   });
   $('#term-dock').onclick = () => term.setDock(term.dock === 'bottom' ? 'right' : 'bottom');
-  const muteBtn = $('#term-mute');
-  const syncMute = () => { muteBtn.textContent = state.muted ? '🔕' : '🔔'; muteBtn.title = state.muted ? '提示音已关（点击开启）' : '提示音已开（点击静音）'; };
-  syncMute();
-  muteBtn.onclick = () => { state.muted = !state.muted; localStorage.setItem('fb_muted', state.muted ? '1' : '0'); syncMute(); if (!state.muted) playChime('tick'); };
   $('#term-close').onclick = () => term.close();
   $('#btn-sidebar').onclick = () => toggleSidebar();
   $('#file-follow').onclick = () => setFileFollow(!follow.on);
@@ -2357,7 +2380,12 @@ const term = {
       if (cur && !cur.dead && await this.isPlainShell(cur)) sess = cur;
     }
     if (!sess) sess = await this.openInDir(state.cwd); // 等 spawn 完，拿确切 session 写入
-    if (sess && !sess.dead) { this.input(sess.id, 'codex\r'); sess.xterm.focus(); toast('已在终端启动 Codex'); }
+    const resumeLast = codexResumeLast();
+    if (sess && !sess.dead) {
+      this.input(sess.id, (resumeLast ? 'codex resume --last' : 'codex') + '\r');
+      sess.xterm.focus();
+      toast(resumeLast ? '正在继续最近 Codex 会话' : '已在终端启动新的 Codex 会话');
+    }
     else toast('终端启动失败', true);
   },
   // 在指定目录新开标签跑命令（续会话/发版等）：不复用别处的空闲 shell，目录必须对
