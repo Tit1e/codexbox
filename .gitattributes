@@ -1,0 +1,2 @@
+# Svelte 运行时的空白字符集合会在压缩产物中形成有意的行尾空白，只对生成模块关闭该项检查。
+public/generated/*.mjs whitespace=-trailing-space

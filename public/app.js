@@ -20,7 +20,7 @@ import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
 import { guardEditExit } from './modules/edit-session.js';
-import { createDialogService, createGitPanel } from './generated/ui.mjs';
+import { createContextMenuService, createDialogService, createGitPanel } from './generated/ui.mjs';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -131,7 +131,7 @@ let animateLayout, restoreFileAreaIfHidden, showPreviewPanel, setPreviewMax, isP
 
 let selfOpened, openWith, copyPath, recordRecent, toggleFav, refresh, enterEditMode, mdEditor;
 let doRename, doTrash, doCreate, inputDialog, confirmDialog, organizeLaunch, releasePanel, diskPanel;
-let closeContextMenu, showContextMenu, popupMenu, shotTray;
+let showContextMenu, popupMenu, shotTray;
 let loadRoots, renderRootsActive, loadFavorites, renderFavs, loadCodexProjects;
 let cmdk;
 let term;
@@ -144,6 +144,7 @@ let undoImage;
 let setFileFollow, rememberFollowChange, followChange;
 const { isNoisyChange, kindFromName, rippleFileArea, playChime } = createEffects(state, $);
 const dialogService = createDialogService();
+const contextMenuService = createContextMenuService();
 
 
 function setupControllers() {
@@ -157,11 +158,13 @@ function setupControllers() {
   ({
     selfOpened, openWith, copyPath, recordRecent, toggleFav, refresh, enterEditMode, mdEditor,
     doRename, doTrash, doCreate, inputDialog, confirmDialog, organizeLaunch, releasePanel,
-    diskPanel, closeContextMenu, showContextMenu, popupMenu, shotTray,
+    diskPanel, showContextMenu, popupMenu, shotTray,
   } = createFileActionsController({
     $, state, api, apiPost, toast,
     inputDialog: dialogService.inputDialog,
     confirmDialog: dialogService.confirmDialog,
+    popupMenu: contextMenuService.popupMenu,
+    closeContextMenu: contextMenuService.closeContextMenu,
     loadFavorites: (...args) => loadFavorites(...args),
     renderFavs: (...args) => renderFavs(...args),
     renderFiles: (...args) => renderFiles(...args),
@@ -243,7 +246,7 @@ function setupControllers() {
   } = createUiController({
     $, state, term, cmdk, toast, goBack, goUp, renderFiles, openPreview, closePreview,
     toggleSidebar, applyPreviewSize, setFileFollow, follow, doCreate, doTrash, doRename,
-    diskPanel, organizeLaunch, closeContextMenu, popupMenu, mona, svgWrap, SVG, openWith,
+    diskPanel, organizeLaunch, popupMenu, mona, svgWrap, SVG, openWith,
     playChime, shotTray, dropFilesInto, dropUrlInto, runtime, undoImage, isPreviewMax,
     setPreviewMax, moveCursor, cursorEnter, toggleFav,
   }));

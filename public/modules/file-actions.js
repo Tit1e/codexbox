@@ -1,11 +1,11 @@
 /**
- * [INPUT]: 依赖文件 API、Svelte 通用弹窗、共享编辑运行态、终端代理以及导航和预览动作代理
+ * [INPUT]: 依赖文件 API、Svelte 通用弹窗与上下文菜单、共享编辑运行态、终端代理以及导航和预览动作代理
  * [OUTPUT]: 对外提供 createFileActionsController，管理编辑、文件操作、工具面板和上下文菜单
  * [POS]: public/modules 的文件动作领域控制器，被预览、文件列表、侧边栏和事件层消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createFileActionsController(deps) {
-  const { $, state, api, apiPost, toast, inputDialog, confirmDialog, loadFavorites, renderFavs, renderFiles, navigate, openPreview, setFileFollow, follow, term, mona, crepe, runtime, guardDirty, dirOf, fmtSize, escapeHtml, ic, svgWrap, SVG, showPreviewPanel, renderPreviewFoot, renderPreviewActions, isFav, renderBreadcrumb, renderTextPreview, isMdName, closePreview, lightbox, enterImageEdit, refreshGitStatus } = deps;
+  const { $, state, api, apiPost, toast, inputDialog, confirmDialog, popupMenu, closeContextMenu, loadFavorites, renderFavs, renderFiles, navigate, openPreview, setFileFollow, follow, term, mona, crepe, runtime, guardDirty, dirOf, fmtSize, escapeHtml, ic, svgWrap, SVG, showPreviewPanel, renderPreviewFoot, renderPreviewActions, isFav, renderBreadcrumb, renderTextPreview, isMdName, closePreview, lightbox, enterImageEdit, refreshGitStatus } = deps;
 // ---------- 操作 ----------
 // macOS 打开文件时 LaunchServices 会写 com.apple.lastuseddate#PS 扩展属性，FSEvents 据此连发事件——
 // 内容没动却会点亮「改」徽标。自己发起的打开记下路径，3 秒内该文件的变更事件按噪声丢弃
@@ -479,8 +479,7 @@ async function diskPanel(dirPath) {
   load(dirPath);
 }
 
-// 右键上下文菜单
-function closeContextMenu() { const m = $('#context-menu'); if (m) m.remove(); }
+// 右键上下文菜单：业务层只组装动作，渲染、定位和关闭生命周期交给 Svelte 服务。
 function showContextMenu(ev, e) {
   ev.preventDefault();
   closeContextMenu();
@@ -502,25 +501,5 @@ function showContextMenu(ev, e) {
   items.push({ label: '移到废纸篓', danger: true, fn: () => doTrash(e) });
   popupMenu(ev, items);
 }
-// 在鼠标位置弹一个菜单（右键菜单与空白处双击菜单共用）
-function popupMenu(ev, items) {
-  closeContextMenu();
-  const menu = document.createElement('div');
-  menu.id = 'context-menu';
-  menu.className = 'context-menu';
-  items.forEach((it) => {
-    if (it.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; menu.appendChild(s); return; }
-    const b = document.createElement('div');
-    b.className = 'ctx-item' + (it.danger ? ' danger' : '');
-    b.textContent = it.label;
-    b.onclick = () => { closeContextMenu(); it.fn(); };
-    menu.appendChild(b);
-  });
-  document.body.appendChild(menu);
-  const mw = menu.offsetWidth, mh = menu.offsetHeight;
-  menu.style.left = Math.min(ev.clientX, window.innerWidth - mw - 8) + 'px';
-  menu.style.top = Math.min(ev.clientY, window.innerHeight - mh - 8) + 'px';
-}
-
-  return { selfOpened, openWith, copyPath, recordRecent, toggleFav, refresh, enterEditMode, mdEditor, doRename, doTrash, doCreate, inputDialog, confirmDialog, organizeLaunch, releasePanel, diskPanel, closeContextMenu, showContextMenu, popupMenu, shotTray };
+  return { selfOpened, openWith, copyPath, recordRecent, toggleFav, refresh, enterEditMode, mdEditor, doRename, doTrash, doCreate, inputDialog, confirmDialog, organizeLaunch, releasePanel, diskPanel, showContextMenu, popupMenu, shotTray };
 }

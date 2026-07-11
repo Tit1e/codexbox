@@ -125,6 +125,7 @@
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
 }
 .ctx-item {
+  display: block; width: 100%; border: 0; background: none; text-align: left; font-family: var(--font-ui);
   padding: 7px 12px; font-size: 13px; color: var(--text-dim); cursor: pointer;
   border-radius: 6px; transition: 0.1s; white-space: nowrap;
 }
