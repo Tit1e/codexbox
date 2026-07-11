@@ -2,6 +2,7 @@
 > L2 | 父级: ../AGENTS.md
 
 ## 成员清单
+ipc-validation.js: Electron IPC 纯参数校验，约束 PTY、拖入、监听和更新请求
 main.js: Electron 主进程入口，管理 CodexBox 窗口、原生菜单、node-pty 会话、文件/剪贴板/更新 IPC 与应用生命周期，正式版使用 CodexBox 用户数据目录并隔离开发环境
 preload.js: contextBridge 安全桥接层，向渲染进程暴露终端、文件、剪贴板、拖拽、截图与更新受控接口
 
