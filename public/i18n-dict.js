@@ -28,6 +28,17 @@ window.CODEXBOX_DICT = {
   '悬停文件点 ☆ 即可收藏': 'Hover a file and click ☆ to favorite',
   '移除': 'Remove',
   '用 Codex 跑过的项目会出现在这里': 'Projects run with Codex will show up here',
+  '归档': 'Archive',
+  '删除': 'Delete',
+  '读取 Codex 会话失败': 'Failed to read Codex sessions',
+  '没有找到可处理的 Codex 会话': 'No Codex sessions to process',
+  '正在归档…': 'Archiving…',
+  '正在删除…': 'Deleting…',
+  '归档失败': 'Archive failed',
+  '删除失败': 'Delete failed',
+  '这个项目的会话正在处理中': 'Sessions for this project are already being processed',
+  '会话列表已经变化，请重新操作并确认': 'The session list changed. Review and confirm again.',
+  '没找到 codex 命令': 'Codex CLI was not found',
 
   // ---------- 顶栏 ----------
   '折叠 / 展开侧栏 (⌘B)': 'Toggle sidebar (⌘B)',
@@ -324,6 +335,13 @@ window.CODEXBOX_DICT_RULES = [
   [/^(\d+) 分$/, (m) => `${m[1]}m`],
   [/^(\d+) 时$/, (m) => `${m[1]}h`],
   [/^(\d+) 天$/, (m) => `${m[1]}d`],
+  // Codex 项目会话归档 / 删除
+  [/^有 (\d+) 条会话正在运行，请先结束后再操作$/, (m) => `${m[1]} sessions are running. Stop them before continuing.`],
+  [/^归档「(.+)」的 (\d+) 条会话？之后可在 Codex 中恢复。$/, (m) => `Archive ${m[2]} sessions for "${m[1]}"? You can restore them in Codex.`],
+  [/^永久删除「(.+)」的 (\d+) 条会话？此操作不可恢复。$/, (m) => `Permanently delete ${m[2]} sessions for "${m[1]}"? This cannot be undone.`],
+  [/^已归档 (\d+) 条会话$/, (m) => `Archived ${m[1]} sessions`],
+  [/^已删除 (\d+) 条会话$/, (m) => `Deleted ${m[1]} sessions`],
+  [/^成功 (\d+) 条，失败 (\d+) 条：([\s\S]*)$/, (m) => `${m[1]} succeeded, ${m[2]} failed: ${m[3]}`],
   // 错误前缀类
   [/^无法打开：([\s\S]*)$/, (m) => `Can't open: ${m[1]}`],
   [/^打开失败：([\s\S]*)$/, (m) => `Open failed: ${m[1]}`],

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 index.html DOM、i18n.js、服务端 HTTP API、xterm/Monaco/Milkdown 浏览器全局对象和 Electron preload 桥接
- * [OUTPUT]: 对外提供 CodexBox 文件管理、预览编辑、内嵌终端、Codex 文件跟随和全局交互
+ * [OUTPUT]: 对外提供 CodexBox 文件管理、预览编辑、内嵌终端、Codex 项目会话归档/删除、文件跟随和全局交互
  * [POS]: public 模块的渲染层主入口，集中编排页面状态、视图和桌面能力
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -1779,13 +1779,59 @@ function agoShort(ms) {
   if (m < 1440) return Math.round(m / 60) + ' 时';
   return Math.round(m / 1440) + ' 天';
 }
+function refreshCodexProjectTimes(list) {
+  const items = $('#codex-projects-list').querySelectorAll('li');
+  list.forEach((pj, i) => {
+    const li = items[i];
+    if (!li) return;
+    const ago = agoShort(pj.lastActive);
+    const label = li.querySelector('.label');
+    const when = li.querySelector('.when');
+    if (label) label.title = `${pj.path}\nCodex · ${ago}前活跃`;
+    if (when) when.textContent = ago;
+  });
+}
+const codexProjectActions = new Set();
+async function runCodexProjectAction(pj, action) {
+  if (codexProjectActions.has(pj.path)) return;
+  codexProjectActions.add(pj.path);
+  try {
+    const info = await apiPost('/api/codex-projects/inspect', { path: pj.path, action });
+    if (!info.ok) { toast(info.error || '读取 Codex 会话失败', true); return; }
+    if (!info.total) { toast('没有找到可处理的 Codex 会话', true); return; }
+    if (info.running) { toast(`有 ${info.running} 条会话正在运行，请先结束后再操作`, true); return; }
+    const verb = action === 'archive' ? '归档' : '永久删除';
+    const suffix = action === 'archive' ? '之后可在 Codex 中恢复。' : '此操作不可恢复。';
+    if (!await confirmDialog(`${verb}「${pj.name}」的 ${info.total} 条会话？${suffix}`)) return;
+    toast(action === 'archive' ? '正在归档…' : '正在删除…');
+    const result = await apiPost(`/api/codex-projects/${action}`, { path: pj.path, snapshot: info.snapshot });
+    if (!result.ok) { toast(result.error || `${verb}失败`, true); }
+    else { toast(action === 'archive' ? `已归档 ${result.succeeded} 条会话` : `已删除 ${result.succeeded} 条会话`); }
+    if (result.succeeded) {
+      loadCodexProjects._sig = null;
+      await loadCodexProjects();
+    }
+  } catch {
+    toast(action === 'archive' ? '归档失败' : '删除失败', true);
+  } finally {
+    codexProjectActions.delete(pj.path);
+  }
+}
+function showCodexProjectMenu(ev, pj) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  popupMenu(ev, [
+    { label: '归档', fn: () => runCodexProjectAction(pj, 'archive') },
+    { label: '删除', danger: true, fn: () => runCodexProjectAction(pj, 'delete') },
+  ]);
+}
 async function loadCodexProjects() {
   let data;
   try { data = await api('/api/codex-projects'); } catch { return; }
   const list = (data.projects || []).slice(0, 8);
-  // 数据没变就不动 DOM，免得定时刷新把用户展开的子树抹掉
+  // 数据没变时只更新时间文字，避免定时刷新把用户展开的子树抹掉。
   const sig = JSON.stringify(list);
-  if (sig === loadCodexProjects._sig) return;
+  if (sig === loadCodexProjects._sig) { refreshCodexProjectTimes(list); return; }
   loadCodexProjects._sig = sig;
   const ul = $('#codex-projects-list');
   ul.innerHTML = '';
@@ -1797,6 +1843,7 @@ async function loadCodexProjects() {
     when.className = 'when';
     when.append(agoShort(pj.lastActive));
     li.appendChild(when);
+    li.oncontextmenu = (ev) => showCodexProjectMenu(ev, pj);
     ul.appendChild(li);
   });
   renderRootsActive(); // 重渲后补一次高亮，让「当前所在的 Codex 项目」保持选中态
@@ -3634,7 +3681,7 @@ async function init() {
   await loadRoots();
   await loadFavorites();
   loadCodexProjects();
-  setInterval(loadCodexProjects, 120000); // Codex 项目入口保持新鲜（服务端有 60s 缓存，开销很小）
+  setInterval(loadCodexProjects, 60000); // 每分钟刷新项目与相对时间；服务端同样缓存 60s
   await navigate(state.home, false);
   // 恢复上次终端开合状态（dock 方位已由 applyDock 自带记忆）
   if (localStorage.getItem('codexbox_term_open') === '1' && term.available()) term.open();

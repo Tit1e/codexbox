@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * [INPUT]: 依赖 Node.js 内置模块、port-config.js 端口配置、public 静态资源和 ~/.codexbox 本地配置
- * [OUTPUT]: 对外提供文件 HTTP API、静态页面、隔离预览服务与 codexbox CLI 入口
+ * [INPUT]: 依赖 Node.js 内置模块、Codex CLI 与 ~/.codex 会话、port-config.js 端口配置、public 静态资源和 ~/.codexbox 本地配置
+ * [OUTPUT]: 对外提供文件 HTTP API、Codex 项目会话归档/删除、静态页面、隔离预览服务与 codexbox CLI 入口
  * [POS]: 根模块的本地服务核心，被直接命令、npm start 和 Electron 主进程复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -1219,16 +1219,122 @@ function readBody(req) {
 
 // ---------- Codex 项目（最近被 Codex 处理过的项目文件夹）----------
 const CODEX_SESS = path.join(HOME, '.codex', 'sessions');
+const CODEX_ARCHIVED_SESS = path.join(HOME, '.codex', 'archived_sessions');
 let codexProjectCache = { at: 0, data: null };
+const codexSessionMutations = new Set();
 
-async function readCwdFromHead(file, bytes) {
+async function readCodexSessionMeta(file, bytes = 16384) {
   const fh = await fsp.open(file, 'r');
   try {
     const buf = Buffer.alloc(bytes);
     const { bytesRead } = await fh.read(buf, 0, bytes, 0);
-    const m = buf.toString('utf8', 0, bytesRead).match(/"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    return m ? JSON.parse('"' + m[1] + '"') : null;
+    const head = buf.toString('utf8', 0, bytesRead);
+    const cwd = head.match(/"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    // 新版写 session_id，旧版只写 id；二者都是会话 UUID。
+    const id = head.match(/"(?:session_id|id)"\s*:\s*"([0-9a-f-]{36})"/i);
+    if (!cwd || !id) return null;
+    return { cwd: JSON.parse('"' + cwd[1] + '"'), id: id[1].toLowerCase(), file };
   } finally { await fh.close(); }
+}
+
+async function listCodexSessionFiles(root) {
+  const files = [];
+  const walk = async (dir) => {
+    let names;
+    try { names = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const n of names) {
+      const fp = path.join(dir, n.name);
+      if (n.isDirectory()) await walk(fp);
+      else if (n.isFile() && n.name.endsWith('.jsonl')) files.push(fp);
+    }
+  };
+  await walk(root);
+  return files;
+}
+
+async function codexSessionsForProject(projectPath, includeArchived) {
+  const target = resolvePath(projectPath);
+  const sources = [{ root: CODEX_SESS, archived: false }];
+  if (includeArchived) sources.push({ root: CODEX_ARCHIVED_SESS, archived: true });
+  const sessions = new Map();
+  for (const source of sources) {
+    for (const file of await listCodexSessionFiles(source.root)) {
+      try {
+        const meta = await readCodexSessionMeta(file);
+        if (meta && path.normalize(meta.cwd) === target && !sessions.has(meta.id)) {
+          sessions.set(meta.id, { ...meta, archived: source.archived });
+        }
+      } catch { /* 单个损坏会话不阻塞其它会话 */ }
+    }
+  }
+  return [...sessions.values()];
+}
+
+async function isCodexSessionRunning(file) {
+  if (PLATFORM !== 'darwin') return false;
+  return new Promise((resolve) => {
+    execFile('/usr/sbin/lsof', ['-t', file], { timeout: 3000 }, (err, stdout) => resolve(!err && !!String(stdout || '').trim()));
+  });
+}
+
+function codexSessionSnapshot(sessions) {
+  return crypto.createHash('sha256').update(sessions.map((s) => s.id).sort().join('\n')).digest('hex');
+}
+
+async function inspectCodexProjectSessions(projectPath, action) {
+  if (action !== 'archive' && action !== 'delete') return { ok: false, error: '不支持的会话操作' };
+  const sessions = await codexSessionsForProject(projectPath, action === 'delete');
+  const running = (await Promise.all(sessions.filter((s) => !s.archived).map((s) => isCodexSessionRunning(s.file)))).filter(Boolean).length;
+  return { ok: true, total: sessions.length, running, snapshot: codexSessionSnapshot(sessions) };
+}
+
+function runCodexSessionCommand(bin, action, id) {
+  const args = action === 'delete' ? ['delete', '--force', id] : ['archive', id];
+  return new Promise((resolve) => {
+    execFile(bin, args, { timeout: 30000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (!err) { resolve({ ok: true }); return; }
+      const detail = String(stderr || stdout || err.message || '').trim().split('\n').slice(-2).join(' ');
+      resolve({ ok: false, error: detail || 'Codex 命令执行失败' });
+    });
+  });
+}
+
+async function mutateCodexProjectSessions(projectPath, action, expectedSnapshot) {
+  if (action !== 'archive' && action !== 'delete') return { ok: false, error: '不支持的会话操作' };
+  const target = resolvePath(projectPath);
+  if (codexSessionMutations.has(target)) return { ok: false, error: '这个项目的会话正在处理中' };
+  codexSessionMutations.add(target);
+  try {
+    const sessions = await codexSessionsForProject(target, action === 'delete');
+    if (!sessions.length) return { ok: false, error: '没有找到可处理的 Codex 会话' };
+    if (typeof expectedSnapshot !== 'string' || codexSessionSnapshot(sessions) !== expectedSnapshot) {
+      return { ok: false, error: '会话列表已经变化，请重新操作并确认' };
+    }
+    const running = [];
+    for (const session of sessions) {
+      if (!session.archived && await isCodexSessionRunning(session.file)) running.push(session);
+    }
+    if (running.length) return { ok: false, error: `有 ${running.length} 条会话正在运行，请先结束后再操作`, running: running.length, total: sessions.length };
+    const bin = await findCodexBin();
+    if (!bin) return { ok: false, error: '没找到 codex 命令' };
+    const failures = [];
+    let succeeded = 0;
+    for (const session of sessions) {
+      const result = await runCodexSessionCommand(bin, action, session.id);
+      if (result.ok) succeeded++;
+      else failures.push(result.error);
+    }
+    if (succeeded) codexProjectCache = { at: 0, data: null };
+    return {
+      ok: failures.length === 0,
+      total: sessions.length,
+      succeeded,
+      failed: failures.length,
+      error: failures.length ? `成功 ${succeeded} 条，失败 ${failures.length} 条：${failures[0]}` : undefined,
+    };
+  } finally {
+    codexSessionMutations.delete(target);
+  }
 }
 
 async function codexProjects(force = false) {
@@ -1256,7 +1362,7 @@ async function codexProjects(force = false) {
     await walk(CODEX_SESS, 0);
     files.sort((a, b) => b.mtimeMs - a.mtimeMs);
     await Promise.all(files.slice(0, 40).map(async (f) => {
-      try { add(await readCwdFromHead(f.fp, 16384), f.mtimeMs); } catch { /* */ }
+      try { const meta = await readCodexSessionMeta(f.fp); add(meta && meta.cwd, f.mtimeMs); } catch { /* */ }
     }));
   } catch { /* 没用过 Codex */ }
   // 按最近活跃排序，已被删除的项目目录剔掉
@@ -1414,6 +1520,15 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/create' && req.method === 'POST') {
       const b = await readBody(req);
       return sendJSON(res, 200, await createEntry(b.path, b.name, b.type));
+    }
+    if (p === '/api/codex-projects/inspect' && req.method === 'POST') {
+      const body = await readBody(req);
+      return sendJSON(res, 200, await inspectCodexProjectSessions(body.path, body.action));
+    }
+    if ((p === '/api/codex-projects/archive' || p === '/api/codex-projects/delete') && req.method === 'POST') {
+      const body = await readBody(req);
+      const action = p.endsWith('/delete') ? 'delete' : 'archive';
+      return sendJSON(res, 200, await mutateCodexProjectSessions(body.path, action, body.snapshot));
     }
     if (p === '/api/codex-projects') {
       return sendJSON(res, 200, await codexProjects());
