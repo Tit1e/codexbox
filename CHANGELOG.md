@@ -17,6 +17,14 @@
 
 ## [Unreleased]
 
+## [2.6.9] - 2026-07-11
+
+## [2.6.8] - 2026-07-11
+
+### Fixed
+- **开发环境和安装版终端启动失败**：修复 `node-pty` 的 `spawn-helper` 在 npm 安装与 Electron 打包后丢失可执行权限的问题；本地安装通过 `postinstall` 自动恢复，macOS 发布包在签名前通过 `afterPack` 恢复并验证，避免终端报 `posix_spawnp failed`。
+
+
 ## [2.6.8] - 2026-07-11
 
 ### Fixed
