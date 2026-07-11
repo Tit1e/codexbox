@@ -6,7 +6,6 @@ command-palette.js: 全局命令面板控制器，提供文件名模糊搜索、
 edit-session.js: 编辑会话安全守卫，统一处理自动保存、未保存确认和状态清理
 editors.js: Monaco 与 Milkdown Crepe 编辑器适配工厂，集中处理加载、主题、语言和资源释放
 file-follow.js: Agent 文件跟随控制器，管理目标选择、实时代码/Markdown/HTML 渲染和变化反馈
-git-panel.js: 只读 Git 状态控制器，管理状态栏分支与增删行汇总、变更文件弹层和 Diff 跳转
 file-browser.js: 文件浏览控制器，管理目录导航、列表渲染、选择、拖放与键盘移动
 file-actions.js: 文件动作控制器，管理文本编辑、文件变更、开发工具面板和上下文菜单
 icons.js: 文件类型与界面 SVG 图标工厂，提供富图标、通用图标和终端文件链接规则

@@ -20,7 +20,7 @@ import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
 import { guardEditExit } from './modules/edit-session.js';
-import { createGitPanel } from './modules/git-panel.js';
+import { createGitPanel } from './generated/git-panel.mjs';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -202,7 +202,7 @@ function setupControllers() {
     openWith, copyPath, ic, isHtmlName, iconSvg, fmtTime, isMdName,
   }));
   gitPanel = createGitPanel({
-    $, api, escapeHtml, ic, kindFromName, toast,
+    $, api, ic, kindFromName, toast,
     showDiff: (...args) => showDiff(...args),
   });
   term = createTerminalController({

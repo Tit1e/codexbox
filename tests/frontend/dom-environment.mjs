@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 happy-dom 的 Window
- * [OUTPUT]: 对外提供 installDom，安装并恢复渲染层测试需要的浏览器全局对象
+ * [OUTPUT]: 对外提供 installDom，安装并恢复原生控制器与 Svelte 组件测试需要的浏览器全局对象
  * [POS]: tests/frontend 的测试环境基础设施，被所有控制器测试复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises';
 
 const GLOBAL_KEYS = [
   'window', 'document', 'navigator', 'localStorage', 'location', 'Image', 'HTMLImageElement',
+  'Element', 'HTMLElement', 'Node', 'Text', 'Comment', 'DocumentFragment', 'Event', 'MouseEvent', 'CustomEvent',
   'CSS', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle',
 ];
 
@@ -24,6 +25,15 @@ export function installDom(body = '') {
     location: window.location,
     Image: window.Image,
     HTMLImageElement: window.HTMLImageElement,
+    Element: window.Element,
+    HTMLElement: window.HTMLElement,
+    Node: window.Node,
+    Text: window.Text,
+    Comment: window.Comment,
+    DocumentFragment: window.DocumentFragment,
+    Event: window.Event,
+    MouseEvent: window.MouseEvent,
+    CustomEvent: window.CustomEvent,
     CSS: window.CSS,
     ResizeObserver: window.ResizeObserver,
     requestAnimationFrame: window.requestAnimationFrame.bind(window),

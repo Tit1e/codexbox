@@ -1,6 +1,6 @@
 # [INPUT]: 依赖 package-lock.json、Node.js 22 和 package.json 的 check 脚本
-# [OUTPUT]: 对 master 推送与 Pull Request 提供纯测试 CI，不构建、不签名、不公证
-# [POS]: .github/workflows 的质量门禁，阻止语法错误和测试回归进入主分支
+# [OUTPUT]: 对 master 推送与 Pull Request 提供 Svelte 构建、语法检查和 Node 测试，不打包、不签名、不公证
+# [POS]: .github/workflows 的质量门禁，阻止生成失败、语法错误和测试回归进入主分支
 # [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 name: CI
 

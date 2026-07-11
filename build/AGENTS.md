@@ -9,5 +9,6 @@ icon.icns: electron-builder 使用的 macOS ICNS 应用图标
 icon.png: Electron 开发模式 Dock 使用的 PNG 应用图标
 node-pty-permissions.js: 本地安装与发布打包共享的 macOS spawn-helper 权限修复单一真源
 prepare-node-pty.js: npm postinstall 本地依赖准备入口，保证开发环境 PTY 辅助程序可执行
+svelte-ui.mjs: esbuild + esbuild-svelte 界面构建入口，将 src-ui 编译为 public/generated 离线模块
 
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md

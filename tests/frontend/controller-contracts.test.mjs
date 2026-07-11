@@ -16,7 +16,6 @@ const { createFileBrowserController } = await loadRendererModule('file-browser')
 const { createFileFollowController } = await loadRendererModule('file-follow');
 const { createIcons } = await loadRendererModule('icons');
 const { createImageEditor } = await loadRendererModule('image-editor');
-const { createGitPanel } = await loadRendererModule('git-panel');
 const { createPreviewController } = await loadRendererModule('preview');
 const { createSidebarController } = await loadRendererModule('sidebar');
 const { createTerminalController } = await loadRendererModule('terminal');
@@ -39,10 +38,11 @@ function dependencyBag(overrides = {}) {
   });
 }
 
-test('所有渲染层控制器工厂可独立装配并保持公开接口', () => {
+test('所有渲染层控制器工厂可独立装配并保持公开接口', async () => {
   const dom = installDom();
   try {
     const deps = dependencyBag();
+    const { createGitPanel } = await import(new URL(`../../public/generated/git-panel.mjs?contract=${Date.now()}`, import.meta.url));
     const icons = createIcons(deps.state);
     assert.equal(typeof icons.iconSvg, 'function');
     assert.equal(typeof createEditors(deps.state).mona.load, 'function');
