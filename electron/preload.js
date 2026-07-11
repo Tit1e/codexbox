@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron 的 contextBridge、ipcRenderer 和 webUtils 受控系统能力
- * [OUTPUT]: 对外提供 codexboxPty、codexboxFs、codexboxClipboard、codexboxDrop、codexboxShot、codexboxUpdate、codexboxWin 与 codexboxEnv，含新建和关闭活动终端事件
+ * [OUTPUT]: 对外提供 codexboxPty、codexboxFs、codexboxClipboard、codexboxDrop、codexboxShot、codexboxUpdate、codexboxWin 与 codexboxEnv，含新建终端、启动 Codex 和关闭活动终端事件
  * [POS]: electron 模块的安全桥接层，在 contextIsolation 下连接渲染进程与主进程 IPC
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('codexboxWin', {
   focus: () => ipcRenderer.invoke('win:focus'), // 点通知拉回前台
   trafficLights: (show) => ipcRenderer.invoke('win:traffic', { show }), // 全屏预览时藏/显左上角系统按钮
   onNewTerminal: (cb) => { const h = () => cb(); ipcRenderer.on('terminal:new', h); return () => ipcRenderer.removeListener('terminal:new', h); },
+  onLaunchCodex: (cb) => { const h = () => cb(); ipcRenderer.on('terminal:launch-codex', h); return () => ipcRenderer.removeListener('terminal:launch-codex', h); },
   onCloseActiveTerminal: (cb) => { const h = () => cb(); ipcRenderer.on('terminal:close-active', h); return () => ipcRenderer.removeListener('terminal:close-active', h); },
 });
 

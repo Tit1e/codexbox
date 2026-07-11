@@ -104,29 +104,35 @@ test('界面状态仍为 busy 但 Shell 没有前台任务时直接关闭', asyn
   } finally { dom.cleanup(); }
 });
 
-test('桌面新建与关闭事件各绑定一次并复用终端控制器', () => {
+test('桌面新建、启动 Codex 与关闭事件各绑定一次并复用终端控制器', () => {
   const dom = installDom();
   try {
     let subscribed = 0;
     let newHandler;
+    let codexHandler;
     let closeHandler;
     window.codexboxWin = {
       onNewTerminal(cb) { subscribed++; newHandler = cb; return () => {}; },
+      onLaunchCodex(cb) { subscribed++; codexHandler = cb; return () => {}; },
       onCloseActiveTerminal(cb) { subscribed++; closeHandler = cb; return () => {}; },
     };
     const { term } = createController();
     let created = 0;
+    let launched = 0;
     let closed = 0;
     term.newTerminal = () => { created++; };
+    term.launchCodex = () => { launched++; };
     term.closeActive = () => { closed++; };
 
     term.bindDesktopEvents();
     term.bindDesktopEvents();
     newHandler();
+    codexHandler();
     closeHandler();
 
-    assert.equal(subscribed, 2);
+    assert.equal(subscribed, 3);
     assert.equal(created, 1);
+    assert.equal(launched, 1);
     assert.equal(closed, 1);
   } finally { dom.cleanup(); }
 });

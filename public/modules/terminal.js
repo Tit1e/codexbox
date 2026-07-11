@@ -560,6 +560,9 @@ const term = {
     if (window.codexboxWin?.onNewTerminal && !this._removeNewTerminal) {
       this._removeNewTerminal = window.codexboxWin.onNewTerminal(() => this.newTerminal());
     }
+    if (window.codexboxWin?.onLaunchCodex && !this._removeLaunchCodex) {
+      this._removeLaunchCodex = window.codexboxWin.onLaunchCodex(() => this.launchCodex());
+    }
     if (window.codexboxWin?.onCloseActiveTerminal && !this._removeCloseActiveTerminal) {
       this._removeCloseActiveTerminal = window.codexboxWin.onCloseActiveTerminal(() => this.closeActive());
     }

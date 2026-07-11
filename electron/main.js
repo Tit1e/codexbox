@@ -401,6 +401,11 @@ function buildMenu() {
         click: () => send('terminal:new'),
       },
       {
+        label: M('新建 Codex 终端', 'New Codex Terminal'),
+        accelerator: 'CmdOrCtrl+Shift+T',
+        click: () => send('terminal:launch-codex'),
+      },
+      {
         label: M('关闭当前终端', 'Close Active Terminal'),
         accelerator: 'CmdOrCtrl+W',
         click: () => send('terminal:close-active'),
