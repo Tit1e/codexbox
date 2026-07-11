@@ -20,7 +20,7 @@ import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
 import { guardEditExit } from './modules/edit-session.js';
-import { createCodexProjectsService, createContextMenuService, createDialogService, createDiskPanelService, createFavoritesService, createGitPanel, createReleasePanelService } from './generated/ui.mjs';
+import { createCodexProjectsService, createContextMenuService, createDialogService, createDiskPanelService, createFavoritesService, createGitPanel, createReleasePanelService, createRootsService } from './generated/ui.mjs';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -163,6 +163,12 @@ const favoritesService = createFavoritesService({
   folderIcon: svgWrap(SVG.folder, 'currentColor', 16, true),
   fileIcon: svgWrap(SVG.file, 'currentColor', 16),
 });
+const rootsService = createRootsService({
+  target: $('#roots-list'), api,
+  navigate: (...args) => navigate(...args),
+  makeDraggable: (...args) => makeDraggablePath(...args),
+  folderIcon: svgWrap(SVG.folder, 'currentColor', 16, true),
+});
 
 
 function setupControllers() {
@@ -255,7 +261,7 @@ function setupControllers() {
   } = createSidebarController({
     $, api, apiPost, state, SVG, svgWrap, escapeHtml, dirOf, navigate, makeDraggablePath,
     openPreview, renderFiles, toggleFav, toast, confirmDialog, popupMenu,
-    codexProjects: codexProjectsService, favorites: favoritesService,
+    codexProjects: codexProjectsService, favorites: favoritesService, roots: rootsService,
   }));
   cmdk = createCommandPalette({
     $, api, state, tilde, iconSvg, escapeHtml, openWith, navigate, recordRecent, dirOf,

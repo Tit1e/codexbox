@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 Git 面板、通用弹窗、上下文菜单、磁盘透视、发布向导、Codex 项目和收藏列表界面岛适配器
- * [OUTPUT]: 对外统一导出 Git、弹窗、菜单、磁盘透视、发布向导、Codex 项目与收藏列表服务
+ * [INPUT]: 依赖 Git 面板、通用弹窗、上下文菜单、磁盘透视、发布向导及三个侧边栏列表界面岛适配器
+ * [OUTPUT]: 对外统一导出 Git、弹窗、菜单、磁盘透视、发布向导与侧边栏列表服务
  * [POS]: src-ui 的浏览器构建入口，保证多个界面岛共享一份 Svelte 运行时
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -11,3 +11,4 @@ export { createDiskPanelService } from './disk-panel-service.js';
 export { createReleasePanelService } from './release-panel-service.js';
 export { createCodexProjectsService } from './codex-projects-service.js';
 export { createFavoritesService } from './favorites-service.js';
+export { createRootsService } from './roots-service.js';

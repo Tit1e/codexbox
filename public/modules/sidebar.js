@@ -1,62 +1,22 @@
 /**
  * [INPUT]: 依赖 DOM/API 基础能力、共享 state、导航、通用弹层回调与 Svelte Codex 项目列表服务
- * [OUTPUT]: 对外提供 createSidebarController，管理根目录、收藏和 Codex 项目业务
+ * [OUTPUT]: 对外提供 createSidebarController，管理根目录元数据、收藏和 Codex 项目业务
  * [POS]: public/modules 的侧边栏领域控制器，被应用入口初始化和导航流程消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createSidebarController(deps) {
-  const { $, api, apiPost, state, svgWrap, SVG, escapeHtml, dirOf, navigate, makeDraggablePath, openPreview, renderFiles, toggleFav, toast, confirmDialog, popupMenu, codexProjects, favorites } = deps;
+  const { api, apiPost, state, dirOf, navigate, openPreview, renderFiles, toast, confirmDialog, popupMenu, codexProjects, favorites, roots } = deps;
 // ---------- 侧边栏 ----------
-// 侧栏目录树：目录项带展开箭头，点箭头逐级懒加载子目录（只列文件夹），点行本身仍是跳转
-function navDirLi(name, p) {
-  const li = document.createElement('li');
-  li.dataset.path = p;
-  const twirl = document.createElement('span');
-  twirl.className = 'twirl';
-  twirl.textContent = '▸';
-  twirl.title = '展开子文件夹';
-  twirl.onclick = (ev) => { ev.stopPropagation(); toggleNavSub(li, p, twirl); };
-  const ico = document.createElement('span');
-  ico.className = 'ico';
-  ico.innerHTML = svgWrap(SVG.folder, 'currentColor', 16, true);
-  const label = document.createElement('span');
-  label.className = 'label';
-  label.textContent = name;
-  label.title = p;
-  li.append(twirl, ico, label);
-  li.onclick = () => navigate(p);
-  makeDraggablePath(li, p);
-  return li;
-}
-async function toggleNavSub(li, dirPath, twirl) {
-  const old = li.nextElementSibling;
-  if (old && old.classList.contains('nav-sub')) { old.remove(); twirl.textContent = '▸'; return; }
-  twirl.textContent = '▾';
-  const ul = document.createElement('ul');
-  ul.className = 'nav-list nav-sub';
-  li.after(ul);
-  try {
-    const data = await api('/api/list?path=' + encodeURIComponent(dirPath));
-    const dirs = (data.entries || []).filter((e) => e.isDir && !e.hidden);
-    if (!dirs.length) { ul.innerHTML = '<div class="nav-empty">没有子文件夹</div>'; return; }
-    dirs.forEach((e) => ul.appendChild(navDirLi(e.name, e.path)));
-  } catch { ul.remove(); twirl.textContent = '▸'; }
-}
 async function loadRoots() {
   const data = await api('/api/roots');
   state.home = data.home;
   state.platform = data.platform;
   state.sep = data.sep || '/';
-  const ul = $('#roots-list');
-  ul.innerHTML = '';
-  data.roots.forEach((r) => ul.appendChild(navDirLi(r.name, r.path)));
+  roots.render(data.roots, state.cwd);
 }
 function renderRootsActive() {
   // 快速入口 / 收藏 / Codex 项目三个列表统一高亮「当前所在目录」，让用户清楚自己点开/身处哪一项
-  ['#roots-list', '#favs-list'].forEach((sel) => {
-    const ul = $(sel); if (!ul) return;
-    ul.querySelectorAll('li').forEach((li) => li.classList.toggle('active', li.dataset.path === state.cwd));
-  });
+  roots.setActive(state.cwd);
   codexProjects.setActive(state.cwd);
   favorites.setActive(state.cwd);
 }
