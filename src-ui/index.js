@@ -13,3 +13,4 @@ export { createCodexProjectsService } from './codex-projects-service.js';
 export { createFavoritesService } from './favorites-service.js';
 export { createRootsService } from './roots-service.js';
 export { createFileListService } from './file-list-service.js';
+export { createSegmentedControlService } from './segmented-control-service.js';

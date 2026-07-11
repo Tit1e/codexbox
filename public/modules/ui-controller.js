@@ -1,11 +1,11 @@
 /**
- * [INPUT]: 依赖共享 state、终端/命令面板控制器及文件和预览动作
+ * [INPUT]: 依赖共享 state、Svelte 按钮组同步回调、终端/命令面板控制器及文件和预览动作
  * [OUTPUT]: 对外提供 createUiController，管理全局事件、主题、拖拽尺寸和首次引导
  * [POS]: public/modules 的界面编排控制器，被应用启动入口消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createUiController(deps) {
-  const { $, state, term, cmdk, toast, goBack, goUp, renderFiles, openPreview, closePreview, toggleSidebar, applyPreviewSize, setFileFollow, follow, doCreate, doTrash, doRename, diskPanel, organizeLaunch, popupMenu, mona, svgWrap, SVG, openWith, playChime, shotTray, dropFilesInto, dropUrlInto, runtime, undoImage, isPreviewMax, setPreviewMax, moveCursor, cursorEnter, toggleFav } = deps;
+  const { $, state, term, cmdk, toast, goBack, goUp, renderFiles, openPreview, closePreview, toggleSidebar, applyPreviewSize, setFileFollow, follow, doCreate, doTrash, doRename, diskPanel, organizeLaunch, popupMenu, mona, svgWrap, SVG, openWith, playChime, shotTray, dropFilesInto, dropUrlInto, runtime, undoImage, isPreviewMax, setPreviewMax, moveCursor, cursorEnter, toggleFav, setThemeControlValue } = deps;
 // ---------- 首次引导 ----------
 function maybeShowGuide() {
   if (localStorage.getItem('codexbox_guided')) return;
@@ -300,18 +300,6 @@ function bindEvents() {
   $('#toggle-hidden').checked = state.showHidden;
   $('#toggle-hidden').onchange = (e) => { state.showHidden = e.target.checked; localStorage.setItem('codexbox_hidden', state.showHidden ? '1' : '0'); renderFiles(); };
 
-  $('#sort-seg').querySelectorAll('button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.sort === state.sort);
-    b.onclick = () => { state.sort = b.dataset.sort; localStorage.setItem('codexbox_sort', state.sort); $('#sort-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
-  });
-  $('#view-seg').querySelectorAll('button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.view === state.view);
-    b.onclick = () => { state.view = b.dataset.view; localStorage.setItem('codexbox_view', state.view); $('#view-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); updateGridSizeVisibility(); renderFiles(); };
-  });
-  $('#gridsize-seg').querySelectorAll('button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.size === state.gridSize);
-    b.onclick = () => { state.gridSize = b.dataset.size; localStorage.setItem('codexbox_gridsize', state.gridSize); $('#gridsize-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
-  });
   updateGridSizeVisibility();
 
   $('#cmdk-input').oninput = (e) => cmdk.search(e.target.value);
@@ -372,7 +360,7 @@ function applyTheme(skin, rerender = true) {
   localStorage.setItem('codexbox_theme', skin);
   const link = document.getElementById('hljs-theme');
   if (link) link.href = '/vendor/hljs/styles/' + (skin === 'terminal' ? 'github-dark' : 'github') + '.min.css';
-  document.querySelectorAll('#theme-switch .theme-seg button').forEach((b) => b.classList.toggle('active', b.dataset.skin === skin));
+  setThemeControlValue(skin);
   if (typeof term !== 'undefined' && term.sessions.length) term.retheme();
   if (typeof mona !== 'undefined') mona.retheme();
   if (rerender && state.entries.length) {

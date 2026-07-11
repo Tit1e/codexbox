@@ -38,7 +38,6 @@ async function init() {
     img.dataset.fsTried = '1';
     img.src = '/fs' + encodeURI(abs);
   }, true);
-  document.querySelectorAll('#theme-switch .theme-seg button').forEach((b) => { b.onclick = () => applyTheme(b.dataset.skin); });
   await loadRoots();
   await loadFavorites();
   loadCodexProjects();

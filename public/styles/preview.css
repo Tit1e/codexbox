@@ -319,7 +319,6 @@
 .scope-toggle { border: 1px solid var(--border); background: var(--bg-3); color: var(--text-dim); padding: 4px 10px; border-radius: 7px; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .scope-toggle.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
-#gridsize-seg button { padding: 5px 9px; }
 
 /* 首次引导 */
 .guide-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 400; }

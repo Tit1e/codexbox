@@ -1,6 +1,6 @@
 <!--
   [INPUT]: 依赖 styles/ 样式分片、app.js、i18n.js 和本地 vendor 浏览器资源
-  [OUTPUT]: 对外提供 CodexBox 单页应用的文件区、Svelte Git 挂载点、预览区、终端区和通用弹层 DOM 骨架
+  [OUTPUT]: 对外提供 CodexBox 单页应用的文件区、Svelte 界面岛挂载点、预览区、终端区和通用弹层 DOM 骨架
   [POS]: public 模块的页面入口，定义渲染层组件挂载点与脚本加载顺序
   [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 -->
@@ -54,11 +54,7 @@
 
       <div class="theme-switch" id="theme-switch">
         <div class="theme-switch-label">皮肤</div>
-        <div class="theme-seg">
-          <button data-skin="warm" title="暖色纸感档案馆">档案</button>
-          <button data-skin="terminal" title="终端核 Volt">终端</button>
-          <button data-skin="editorial" title="编辑式 · 索引日报">索引</button>
-        </div>
+        <div id="theme-seg"></div>
       </div>
       <div class="sidebar-foot">本地运行 · 数据不出本机<a id="lang-toggle" class="lang-toggle"></a></div>
       <div id="sidebar-resizer" title="拖动调整侧栏宽度"></div>
@@ -75,20 +71,9 @@
           <label class="toggle" title="显示隐藏文件">
             <input type="checkbox" id="toggle-hidden" /> 隐藏文件
           </label>
-          <div class="seg" id="sort-seg">
-            <button data-sort="name" class="active">名称</button>
-            <button data-sort="mtime">时间</button>
-            <button data-sort="size">大小</button>
-          </div>
-          <div class="seg" id="view-seg">
-            <button data-view="grid" class="active" title="网格">▦</button>
-            <button data-view="list" title="列表">☰</button>
-          </div>
-          <div class="seg" id="gridsize-seg" title="缩略图大小">
-            <button data-size="sm" title="小">·</button>
-            <button data-size="md" class="active" title="中">▪</button>
-            <button data-size="lg" title="大">◼</button>
-          </div>
+          <div id="sort-seg"></div>
+          <div id="view-seg"></div>
+          <div id="gridsize-seg" title="缩略图大小"></div>
           <button id="btn-terminal" class="ghost-btn" title="在当前目录打开系统终端"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> 终端</button>
         </div>
       </header>

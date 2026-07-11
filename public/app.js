@@ -20,7 +20,7 @@ import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
 import { guardEditExit } from './modules/edit-session.js';
-import { createCodexProjectsService, createContextMenuService, createDialogService, createDiskPanelService, createFavoritesService, createFileListService, createGitPanel, createReleasePanelService, createRootsService } from './generated/ui.mjs';
+import { createCodexProjectsService, createContextMenuService, createDialogService, createDiskPanelService, createFavoritesService, createFileListService, createGitPanel, createReleasePanelService, createRootsService, createSegmentedControlService } from './generated/ui.mjs';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -145,6 +145,7 @@ let setFileFollow, rememberFollowChange, followChange;
 const { isNoisyChange, kindFromName, rippleFileArea, playChime } = createEffects(state, $);
 const dialogService = createDialogService();
 const contextMenuService = createContextMenuService();
+const segmentedControlService = createSegmentedControlService();
 const diskPanelService = createDiskPanelService({ api, formatSize: fmtSize, parentOf: dirOf, separatorOf: () => state.sep, homeOf: () => state.home });
 const releasePanelService = createReleasePanelService({ api, apiPost, notify: toast, runCommand: (...args) => term?.runInDir(...args) });
 const codexProjectsService = createCodexProjectsService({
@@ -175,6 +176,34 @@ const fileListService = createFileListService({
   favoriteIcon: (on) => svgWrap(SVG.star, 'currentColor', 15, on),
   emptyIcon: ic('inbox', 'currentColor', 48),
 });
+let themeControl;
+
+function setupSegmentedControls() {
+  segmentedControlService.mount({
+    target: $('#sort-seg'), value: state.sort, variant: 'compact-text', ariaLabel: '排序方式',
+    items: [{ value: 'name', label: '名称' }, { value: 'mtime', label: '时间' }, { value: 'size', label: '大小' }],
+    onChange: (value) => { state.sort = value; localStorage.setItem('codexbox_sort', value); renderFiles(); },
+  });
+  segmentedControlService.mount({
+    target: $('#view-seg'), value: state.view, variant: 'compact-icon', ariaLabel: '文件视图',
+    items: [{ value: 'grid', label: '▦', title: '网格' }, { value: 'list', label: '☰', title: '列表' }],
+    onChange: (value) => { state.view = value; localStorage.setItem('codexbox_view', value); updateGridSizeVisibility(); renderFiles(); },
+  });
+  segmentedControlService.mount({
+    target: $('#gridsize-seg'), value: state.gridSize, variant: 'compact-icon', ariaLabel: '缩略图大小',
+    items: [{ value: 'sm', label: '·', title: '小' }, { value: 'md', label: '▪', title: '中' }, { value: 'lg', label: '◼', title: '大' }],
+    onChange: (value) => { state.gridSize = value; localStorage.setItem('codexbox_gridsize', value); renderFiles(); },
+  });
+  themeControl = segmentedControlService.mount({
+    target: $('#theme-seg'), value: state.theme, variant: 'regular', ariaLabel: '皮肤',
+    items: [
+      { value: 'warm', label: '档案', title: '暖色纸感档案馆' },
+      { value: 'terminal', label: '终端', title: '终端核 Volt' },
+      { value: 'editorial', label: '索引', title: '编辑式 · 索引日报' },
+    ],
+    onChange: (value) => applyTheme(value),
+  });
+}
 
 
 function setupControllers() {
@@ -282,7 +311,9 @@ function setupControllers() {
     diskPanel, organizeLaunch, popupMenu, mona, svgWrap, SVG, openWith,
     playChime, shotTray, dropFilesInto, dropUrlInto, runtime, undoImage, isPreviewMax,
     setPreviewMax, moveCursor, cursorEnter, toggleFav,
+    setThemeControlValue: (value) => themeControl?.setValue(value),
   }));
+  setupSegmentedControls();
 }
 
 

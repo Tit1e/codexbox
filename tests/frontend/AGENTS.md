@@ -17,6 +17,7 @@ navigation.test.mjs: 文件浏览排序过滤与命令面板导航测试
 release-panel.test.mjs: Svelte 发布向导测试，覆盖状态检查、版本递增、选项提交与终端启动
 roots-list.test.mjs: Svelte 快速入口测试，覆盖根目录渲染、活动高亮、目录展开与导航
 sidebar.test.mjs: Codex 项目会话归档、删除和运行态保护业务测试
+segmented-control.test.mjs: Svelte 通用按钮组测试，覆盖受控值、点击切换、方向键与无障碍状态
 terminal-close.test.mjs: 终端快捷键测试，覆盖收起面板后新建、快捷启动 Codex、前台进程关闭确认、界面 busy 误判回归和桌面事件绑定
 
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
