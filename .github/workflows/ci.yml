@@ -1,0 +1,40 @@
+# [INPUT]: 依赖 package-lock.json、Node.js 22 和 package.json 的 check 脚本
+# [OUTPUT]: 对 master 推送与 Pull Request 提供纯测试 CI，不构建、不签名、不公证
+# [POS]: .github/workflows 的质量门禁，阻止语法错误和测试回归进入主分支
+# [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node 22 检查与测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行完整检查
+        run: npm run check

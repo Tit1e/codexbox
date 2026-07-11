@@ -7,6 +7,7 @@ build/ - macOS 应用图标、权限与签名资源
 docs/ - 产品、架构、验收与故障记录
 electron/ - Electron 主进程、预加载安全桥接和桌面系统能力
 experiments/ - 可独立执行的回归验证与技术实验
+.github/ - GitHub Actions 纯测试持续集成配置
 public/ - 浏览器渲染层、样式和本地 vendor 资源
 server/ - 本地服务领域模块，承载配置、路径和 Codex 会话能力
 src-vendor/ - vendor 浏览器包的 esbuild 源入口
