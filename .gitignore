@@ -7,6 +7,10 @@ build/*
 !build/icon.png
 !build/icon-1024.png
 !build/entitlements.mac.plist
+!build/after-pack.js
+!build/AGENTS.md
+!build/node-pty-permissions.js
+!build/prepare-node-pty.js
 
 # 系统与编辑器
 .DS_Store
