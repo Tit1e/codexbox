@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 playwright-core、Electron 入口、xterm WebGL 图集事件和假 HOME 测试目录
+ * [OUTPUT]: 对外提供 WebGL 图集压力增长、回收重建和中文渲染的自动化验收
+ * [POS]: experiments/atlas-pressure-202607 的回归入口，验证多标签图集回收机制
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 // 图集压力监视 + 真重建（2.6.2）的自动化验收：Playwright 驱动 Electron（假 HOME，不碰真实数据）。
 // 覆盖：①watchAtlas 已挂 ②大量彩色 CJK 输出推动页数计数增长 ③计数到 12 触发 recycleWebgl
 // （所有标签 WebGL 插件换新、计数归零）④重建后终端内容完好、还能继续渲染中文 ⑤同一页事件多次
@@ -7,18 +13,18 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '../..');
-const HOME = '/tmp/fb-verify-atlas-home';
+const HOME = '/tmp/codexbox-verify-atlas-home';
 let fails = 0;
 const check = (ok, name, detail) => { console.log((ok ? 'PASS' : 'FAIL') + ': ' + name + (detail ? ' — ' + detail : '')); if (!ok) fails++; };
 setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 180000);
 
 (async () => {
   for (const d of ['Desktop', 'Documents', 'Downloads']) fs.mkdirSync(path.join(HOME, d), { recursive: true });
-  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, FANBOX_DEV_PORT: '4642' } });
+  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, CODEXBOX_DEV_PORT: '4642' } });
   const win = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.setSize(1560, 950); w.center(); });
   await win.waitForTimeout(2200);
-  await win.evaluate(() => { localStorage.setItem('fb_guided', '1'); localStorage.setItem('fb_term_open', '1'); localStorage.setItem('fb_term_dock', 'bottom'); });
+  await win.evaluate(() => { localStorage.setItem('codexbox_guided', '1'); localStorage.setItem('codexbox_term_open', '1'); localStorage.setItem('codexbox_term_dock', 'bottom'); });
   await win.evaluate(() => location.reload()).catch(() => {});
   await win.waitForTimeout(2500);
   await win.evaluate(() => { window.playChime = () => {}; term.notify = () => {}; });
@@ -100,7 +106,7 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 1
   await win.screenshot({ path: path.join(__dirname, 'shots', 'atlas-pressure-cjk.png') });
 
   console.log(fails === 0 ? '\n全部通过 ✅' : '\n有 ' + fails + ' 项失败 ❌');
-  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.fanboxPty.kill(s.id); } catch { /* */ } }));
+  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.codexboxPty.kill(s.id); } catch { /* */ } }));
   await win.waitForTimeout(400);
   await app.close().catch(() => {});
   setTimeout(() => process.exit(fails === 0 ? 0 : 1), 1200);

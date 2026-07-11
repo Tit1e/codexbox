@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 i18n-dict.js 词典、index.html 语言开关 DOM、localStorage 和语言配置 HTTP API
- * [OUTPUT]: 对外提供 window.t、window.fanboxSetLang 与 MutationObserver 动态翻译能力
+ * [OUTPUT]: 对外提供 window.t、window.codexboxSetLang 与 MutationObserver 动态翻译能力
  * [POS]: public 模块的国际化运行层，以中文为源语言驱动静态界面和动态文案翻译
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -12,14 +12,14 @@
  * 绘制前完成、无闪烁，app.js 不需要散布翻译调用。用户内容区（预览/编辑器/终端）一律不碰。
  */
 (() => {
-  const saved = localStorage.getItem('fb_lang');
+  const saved = localStorage.getItem('codexbox_lang');
   const sys = (navigator.language || 'en').toLowerCase();
   const lang = saved === 'zh' || saved === 'en' ? saved : (sys.startsWith('zh') ? 'zh' : 'en');
-  window.fanboxLang = lang;
+  window.codexboxLang = lang;
 
   // 语言切换：记到 localStorage（渲染层）+ config.json（Electron 菜单读），刷新生效
-  window.fanboxSetLang = (l) => {
-    localStorage.setItem('fb_lang', l);
+  window.codexboxSetLang = (l) => {
+    localStorage.setItem('codexbox_lang', l);
     fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: l }) })
       .catch(() => {}).finally(() => location.reload());
   };
@@ -28,7 +28,7 @@
     if (!el) return;
     el.textContent = lang === 'zh' ? 'EN' : '中文';
     el.title = lang === 'zh' ? 'Switch to English' : '切换为中文';
-    el.onclick = () => window.fanboxSetLang(lang === 'zh' ? 'en' : 'zh');
+    el.onclick = () => window.codexboxSetLang(lang === 'zh' ? 'en' : 'zh');
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireToggle);
   else wireToggle();
@@ -36,8 +36,8 @@
   if (lang === 'zh') { window.t = (s) => s; return; }
 
   const HAN = /[㐀-鿿「」（）：；！？…·]/;
-  const dict = () => window.FANBOX_DICT || {};
-  const rules = () => window.FANBOX_DICT_RULES || [];
+  const dict = () => window.CODEXBOX_DICT || {};
+  const rules = () => window.CODEXBOX_DICT_RULES || [];
   const trOne = (core) => {
     const hit = dict()[core];
     if (hit !== undefined) return hit;

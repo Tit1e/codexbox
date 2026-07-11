@@ -1,9 +1,9 @@
 {
-  "name": "fanbox",
+  "name": "codexbox",
   "version": "2.6.5",
   "description": "CodexBox — the local desktop cockpit for Codex. Run Codex, watch every file and line it changes, and take over anytime.",
   "bin": {
-    "fanbox": "server.js"
+    "codexbox": "server.js"
   },
   "main": "electron/main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "dist:x64": "PTY_ARCH=x64 npm run rebuild:pty && electron-builder --mac --x64 && PTY_ARCH=arm64 npm run rebuild:pty"
   },
   "build": {
-    "appId": "com.huashu.fanbox",
+    "appId": "com.huashu.codexbox",
     "productName": "CodexBox",
     "directories": {
       "buildResources": "build",

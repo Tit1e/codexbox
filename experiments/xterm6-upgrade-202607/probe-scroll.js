@@ -1,17 +1,23 @@
+/**
+ * [INPUT]: 依赖 playwright-core、Electron 入口、xterm 6 和假 HOME 测试目录
+ * [OUTPUT]: 对外提供终端隐藏期输出后的滚动状态诊断结果
+ * [POS]: experiments/xterm6-upgrade-202607 的滚动同步诊断探针
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 // 诊断：6.0 隐藏期灌行后的滚动失同步——量出差多少、试哪种操作能救
 const { _electron } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '../..');
-const HOME = '/tmp/fb-verify-xterm6-home-probe';
+const HOME = '/tmp/codexbox-verify-xterm6-home-probe';
 setTimeout(() => { console.error('watchdog 超时'); process.exit(2); }, 120000);
 
 (async () => {
   for (const d of ['Desktop', 'Documents', 'Downloads']) fs.mkdirSync(path.join(HOME, d), { recursive: true });
-  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, FANBOX_DEV_PORT: '4642' } });
+  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, CODEXBOX_DEV_PORT: '4642' } });
   const win = await app.firstWindow();
   await win.waitForTimeout(2200);
-  await win.evaluate(() => { localStorage.setItem('fb_guided', '1'); localStorage.setItem('fb_term_open', '1'); localStorage.setItem('fb_term_dock', 'bottom'); });
+  await win.evaluate(() => { localStorage.setItem('codexbox_guided', '1'); localStorage.setItem('codexbox_term_open', '1'); localStorage.setItem('codexbox_term_dock', 'bottom'); });
   await win.evaluate(() => location.reload()).catch(() => {});
   await win.waitForTimeout(2500);
   await win.evaluate(() => { window.playChime = () => {}; term.notify = () => {}; });
@@ -66,7 +72,7 @@ setTimeout(() => { console.error('watchdog 超时'); process.exit(2); }, 120000)
   await win.waitForTimeout(600);
   console.log('120个滚轮后:', JSON.stringify(await dims()));
 
-  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.fanboxPty.kill(s.id); } catch { /* */ } }));
+  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.codexboxPty.kill(s.id); } catch { /* */ } }));
   await win.waitForTimeout(400);
   await app.close().catch(() => {});
   setTimeout(() => process.exit(0), 800);

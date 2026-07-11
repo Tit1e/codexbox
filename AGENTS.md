@@ -14,8 +14,8 @@ src-vendor/ - vendor 浏览器包的 esbuild 源入口
 <config>
 package.json - CodexBox 桌面入口、依赖版本和构建发布脚本
 package-lock.json - npm 依赖锁文件
-port-config.js - 正式/开发端口常量、合法范围及 FANBOX_PORT/FANBOX_DEV_PORT 环境隔离的唯一真源
-server.js - 本地 HTTP 文件服务与 fanbox CLI 入口，按 --dev 选择端口模式
+port-config.js - 正式/开发端口常量、合法范围及 CODEXBOX_PORT/CODEXBOX_DEV_PORT 环境隔离的唯一真源
+server.js - 本地 HTTP 文件服务与 codexbox CLI 入口，按 --dev 选择端口模式
 build/entitlements.mac.plist - macOS 签名和 hardened runtime 权限
 </config>
 

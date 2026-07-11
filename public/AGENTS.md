@@ -3,7 +3,7 @@
 
 ## 成员清单
 app.js: 渲染层主入口，编排文件管理、预览编辑、内嵌 xterm、Codex 文件跟随与全局交互
-i18n-dict.js: 中文源文案到英文的静态词典与动态规则集合，导出 FANBOX_DICT 和 FANBOX_DICT_RULES
+i18n-dict.js: 中文源文案到英文的静态词典与动态规则集合，导出 CODEXBOX_DICT 和 CODEXBOX_DICT_RULES
 i18n.js: MutationObserver 国际化运行层，处理界面翻译和语言切换
 index.html: 单页应用文件区、预览区与终端区 DOM 骨架及本地 vendor 脚本加载顺序
 style.css: 三套主题、布局、文件预览、终端、组件和响应式样式

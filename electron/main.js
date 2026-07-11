@@ -13,19 +13,19 @@ const { resolvePort } = require('../port-config');
 
 const APP_NAME = 'CodexBox';
 app.setName(APP_NAME);
-// 正式版改名不迁移 Chromium 数据；开发版必须使用独立目录，才能与已运行的正式版并存。
-if (app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'FanBox'));
+// 正式版与开发版使用独立目录，避免同时运行时共享 Chromium 状态和窗口配置。
+app.setPath('userData', path.join(app.getPath('appData'), app.isPackaged ? 'CodexBox' : 'CodexBox Dev'));
 
 // 复用现有后端：require 即 listen 127.0.0.1:PORT，不自动开浏览器
-process.env.FANBOX_NO_OPEN = '1';
+process.env.CODEXBOX_NO_OPEN = '1';
 const PORT = resolvePort({ dev: !app.isPackaged });
-process.env.FANBOX_PORT = String(PORT);
+process.env.CODEXBOX_PORT = String(PORT);
 require('../server.js');
 
 // node-pty 是原生模块，需 electron-rebuild 编译过；未就绪时终端能力降级但 app 仍可用
 let pty = null;
 try { pty = require('node-pty'); }
-catch (e) { console.error('[fanbox] node-pty 未就绪（跑 npm run rebuild）：', e.message); }
+catch (e) { console.error('[codexbox] node-pty 未就绪（跑 npm run rebuild）：', e.message); }
 
 const terminals = new Map();
 let win = null;
@@ -163,21 +163,21 @@ function cmpVer(a, b) {
   for (let i = 0; i < 3; i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d; }
   return 0;
 }
-const RELEASE_REPO = 'Tit1e/fanbox';
+const RELEASE_REPO = 'Tit1e/codexbox';
 const REL_PAGE = `https://github.com/${RELEASE_REPO}/releases/latest`;
 async function fetchLatestRelease() {
   // 先走 API（信息全）；代理共享出口 IP 很容易吃 GitHub API 的未认证限流（60 次/小时/IP，403），
   // 失败就退回抓 releases/latest 网页重定向——重定向后的 URL 自带 tag，且不占 API 配额
   try {
     const res = await net.fetch(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`, {
-      headers: { 'User-Agent': 'fanbox-app', Accept: 'application/vnd.github+json' },
+      headers: { 'User-Agent': 'codexbox-app', Accept: 'application/vnd.github+json' },
     });
     if (res.ok) {
       const rel = await res.json();
       if (rel.tag_name) return { tag: rel.tag_name, url: rel.html_url || REL_PAGE };
     }
   } catch { /* 走兜底 */ }
-  const res = await net.fetch(REL_PAGE, { headers: { 'User-Agent': 'fanbox-app' } });
+  const res = await net.fetch(REL_PAGE, { headers: { 'User-Agent': 'codexbox-app' } });
   const m = String(res.url || '').match(/\/releases\/tag\/([^/?#]+)/);
   if (m) return { tag: decodeURIComponent(m[1]), url: res.url };
   return null;
@@ -240,7 +240,7 @@ ipcMain.handle('update:download', async (e, { version }) => {
   updDownloading = true;
   const tmp = dest + '.part';
   try {
-    const res = await net.fetch(url, { headers: { 'User-Agent': 'fanbox-app' } });
+    const res = await net.fetch(url, { headers: { 'User-Agent': 'codexbox-app' } });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
     const total = Number(res.headers.get('content-length')) || 0;
     const out = fs.createWriteStream(tmp);
@@ -278,10 +278,10 @@ ipcMain.handle('win:traffic', (e, { show }) => {
   win.setWindowButtonVisibility(!!show);
 });
 
-// 界面语言：用户手动选过的存在 ~/.fanbox/config.json（渲染层切换时写入），没选过跟随系统
+// 界面语言：用户手动选过的存在 ~/.codexbox/config.json（渲染层切换时写入），没选过跟随系统
 function uiLang() {
   try {
-    const c = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.fanbox', 'config.json'), 'utf8'));
+    const c = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.codexbox', 'config.json'), 'utf8'));
     if (c.lang === 'zh' || c.lang === 'en') return c.lang;
   } catch { /* 没配置过 */ }
   return String(app.getLocale() || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
@@ -293,7 +293,7 @@ const M = (zh, en) => (uiLang() === 'zh' ? zh : en);
 // 唯一手段是 `pmset -a disablesleep 1`（需 root）。为避免智能模式反复弹密码，首次开启时装一条
 // 仅限 pmset disablesleep 0/1 的 sudoers 免密规则，之后静默切换。
 // 智能模式：只有「开关开 且 有终端在跑」才真正禁休眠；终端全退/退出 app 立即恢复，绝不让 Mac 一直不睡。
-const CONFIG = path.join(os.homedir(), '.fanbox', 'config.json');
+const CONFIG = path.join(os.homedir(), '.codexbox', 'config.json');
 function readConfig() { try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; } }
 function writeConfig(patch) {
   try { const c = readConfig(); Object.assign(c, patch); fs.mkdirSync(path.dirname(CONFIG), { recursive: true }); fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2)); }
@@ -317,7 +317,7 @@ function installSudoers() {
     if (!user) return resolve(false);
     const sh = [
       '#!/bin/sh', 'set -e',
-      'f=/etc/sudoers.d/fanbox-pmset',
+      'f=/etc/sudoers.d/codexbox-pmset',
       "cat > \"$f\" <<'EOF'",
       `${user} ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a disablesleep 1`,
       'EOF',
@@ -327,7 +327,7 @@ function installSudoers() {
       '',
     ].join('\n');
     let tmp;
-    try { tmp = path.join(app.getPath('temp'), 'fanbox-sudoers-install.sh'); fs.writeFileSync(tmp, sh, { mode: 0o700 }); }
+    try { tmp = path.join(app.getPath('temp'), 'codexbox-sudoers-install.sh'); fs.writeFileSync(tmp, sh, { mode: 0o700 }); }
     catch { return resolve(false); }
     const apple = `do shell script "/bin/sh " & quoted form of "${tmp}" with administrator privileges`;
     console.log('[lid] running osascript admin prompt, tmp =', tmp);
@@ -462,16 +462,16 @@ ipcMain.handle('pty:spawn', (e, { id, cwd, cols, rows }) => {
   const shellPath = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
   const startCwd = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
   // login shell（-l）：GUI 启动的进程只继承精简 PATH，不读 .zprofile/.zlogin，
-  // 用户在那里配的 Homebrew/nvm/npm 全局路径（codex 等）就丢了 → 「普通终端能找到、fanbox 找不到」。
+  // 用户在那里配的 Homebrew/nvm/npm 全局路径（codex 等）就丢了 → 「普通终端能找到、codexbox 找不到」。
   // 走 login shell 把这些路径带进来。Windows 的 powershell 无此机制，保持空参数。
   const shellArgs = process.platform === 'win32' ? [] : ['-l'];
   // GUI 启动的 app 不继承 shell 的 locale，zsh 会把中文路径按字节转义成 \M-^@ 乱码 → 兜底 UTF-8。
   // 端口覆盖和禁止开浏览器只用于主进程复用本地服务，不能泄漏进用户终端。
   // login shell 自己配置的同名变量仍可正常生效。
-  const env = { ...process.env, TERM: 'xterm-256color', FANBOX: '1' };
-  delete env.FANBOX_PORT;
-  delete env.FANBOX_DEV_PORT;
-  delete env.FANBOX_NO_OPEN;
+  const env = { ...process.env, TERM: 'xterm-256color', CODEXBOX: '1' };
+  delete env.CODEXBOX_PORT;
+  delete env.CODEXBOX_DEV_PORT;
+  delete env.CODEXBOX_NO_OPEN;
   if (!/UTF-8/i.test(env.LC_ALL || env.LC_CTYPE || env.LANG || '')) env.LANG = 'zh_CN.UTF-8';
   let p;
   try {
@@ -509,7 +509,7 @@ ipcMain.handle('clip:file', (e, { path: p }) => new Promise((resolve) => {
 // 拖拽落盘：file-promise 类拖入（截图浮窗等）没有真实路径，把字节写进临时目录换路径
 ipcMain.handle('drop:save', (e, { name, buf }) => {
   try {
-    const dir = path.join(app.getPath('temp'), 'fanbox-drops');
+    const dir = path.join(app.getPath('temp'), 'codexbox-drops');
     fs.mkdirSync(dir, { recursive: true });
     const safe = String(name || '拖入文件.png').replace(/[/\\:]/g, '_');
     let dest = path.join(dir, safe);

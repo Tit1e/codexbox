@@ -25,7 +25,7 @@ function postWrite(origin, target, content) {
   });
 }
 const ROOT = path.resolve(__dirname, '../..');
-const HOME = '/tmp/fb-verify-home';
+const HOME = '/tmp/codexbox-verify-home';
 let fails = 0;
 const check = (ok, name, detail) => { console.log((ok ? 'PASS' : 'FAIL') + ': ' + name + (detail ? ' — ' + detail : '')); if (!ok) fails++; };
 setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 240000);
@@ -40,13 +40,13 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 2
   const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
   fs.writeFileSync(path.join(proj, 'lovart_2ffda3364d71.png'), png);
   fs.writeFileSync(path.join(decoy, 'lovart_2ffda3364d71.png'), png);
-  const app = await _electron.launch({ args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, FANBOX_DEV_PORT: '4640' } });
+  const app = await _electron.launch({ args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, CODEXBOX_DEV_PORT: '4640' } });
   const runtime = await app.evaluate(({ app: electronApp }) => ({ packaged: electronApp.isPackaged, userData: electronApp.getPath('userData') }));
-  check(!runtime.packaged && path.basename(runtime.userData) === 'CodexBox', '开发版使用独立用户数据目录', JSON.stringify(runtime));
+  check(!runtime.packaged && path.basename(runtime.userData) === 'CodexBox Dev', '开发版使用独立用户数据目录', JSON.stringify(runtime));
   const win = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.setSize(1560, 950); w.center(); });
   await win.waitForTimeout(2200);
-  await win.evaluate(() => { localStorage.setItem('fb_guided', '1'); localStorage.setItem('fb_term_open', '1'); localStorage.setItem('fb_term_dock', 'bottom'); });
+  await win.evaluate(() => { localStorage.setItem('codexbox_guided', '1'); localStorage.setItem('codexbox_term_open', '1'); localStorage.setItem('codexbox_term_dock', 'bottom'); });
   await win.evaluate(() => location.reload()).catch(() => {}); // 复现冷启动恢复路径；上下文销毁属预期
   await win.waitForTimeout(2500);
 
@@ -59,19 +59,19 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 2
   const ptyCols = Number((stty || '0 0').split(' ')[1]);
   check(ptyCols > 120 && ptyCols === r1.cols, '冷启动 PTY 列宽与 xterm 对齐', 'stty=' + stty + ' xterm=' + r1.cols);
 
-  // 主进程用 FANBOX_DEV_PORT=4640 启动测试服务，但端口覆盖不能泄漏进用户终端。
-  await win.evaluate(() => term.input(term.active, 'printf "__FANBOX_ENV__%s|%s|%s\\n" "${FANBOX_PORT-unset}" "${FANBOX_DEV_PORT-unset}" "${FANBOX_NO_OPEN-unset}"\r'));
+  // 主进程用 CODEXBOX_DEV_PORT=4640 启动测试服务，但端口覆盖不能泄漏进用户终端。
+  await win.evaluate(() => term.input(term.active, 'printf "__CODEXBOX_ENV__%s|%s|%s\\n" "${CODEXBOX_PORT-unset}" "${CODEXBOX_DEV_PORT-unset}" "${CODEXBOX_NO_OPEN-unset}"\r'));
   await win.waitForTimeout(500);
   const portEnv = await win.evaluate(() => {
     const s = term.sessions.find((x) => x.id === term.active);
     const b = s.xterm.buffer.active;
     for (let i = b.length - 1; i >= 0; i--) {
       const line = b.getLine(i)?.translateToString(true).trim();
-      if (line?.startsWith('__FANBOX_ENV__')) return line;
+      if (line?.startsWith('__CODEXBOX_ENV__')) return line;
     }
     return null;
   });
-  check(portEnv === '__FANBOX_ENV__unset|unset|unset', '主进程端口变量不泄漏进终端', String(portEnv));
+  check(portEnv === '__CODEXBOX_ENV__unset|unset|unset', '主进程端口变量不泄漏进终端', String(portEnv));
 
   // ---------- ② IME：composition 中按 CapsLock，只应落一次 yaoda ----------
   const ime = await win.evaluate(async () => {

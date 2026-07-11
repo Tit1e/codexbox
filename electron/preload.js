@@ -1,13 +1,13 @@
 /**
  * [INPUT]: 依赖 Electron 的 contextBridge、ipcRenderer 和 webUtils 受控系统能力
- * [OUTPUT]: 对外提供 fanboxPty、fanboxFs、fanboxClipboard、fanboxDrop、fanboxShot、fanboxUpdate、fanboxWin 与 fanboxEnv
+ * [OUTPUT]: 对外提供 codexboxPty、codexboxFs、codexboxClipboard、codexboxDrop、codexboxShot、codexboxUpdate、codexboxWin 与 codexboxEnv
  * [POS]: electron 模块的安全桥接层，在 contextIsolation 下连接渲染进程与主进程 IPC
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 'use strict';
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-contextBridge.exposeInMainWorld('fanboxPty', {
+contextBridge.exposeInMainWorld('codexboxPty', {
   spawn: (opts) => ipcRenderer.invoke('pty:spawn', opts),
   input: (id, data) => ipcRenderer.send('pty:input', { id, data }),
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', { id, cols, rows }),
@@ -17,18 +17,18 @@ contextBridge.exposeInMainWorld('fanboxPty', {
   onExit: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('pty:exit', h); return () => ipcRenderer.removeListener('pty:exit', h); },
 });
 
-contextBridge.exposeInMainWorld('fanboxFs', {
+contextBridge.exposeInMainWorld('codexboxFs', {
   watch: (dir) => ipcRenderer.invoke('fs:watch', { dir }),
   watchSet: (dirs) => ipcRenderer.invoke('fs:watch-set', { dirs }),
   onChanged: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('fs:changed', h); return () => ipcRenderer.removeListener('fs:changed', h); },
 });
 
-contextBridge.exposeInMainWorld('fanboxClipboard', {
+contextBridge.exposeInMainWorld('codexboxClipboard', {
   copyImage: (path) => ipcRenderer.invoke('clip:image', { path }),
   copyFile: (path) => ipcRenderer.invoke('clip:file', { path }),
 });
 
-contextBridge.exposeInMainWorld('fanboxDrop', {
+contextBridge.exposeInMainWorld('codexboxDrop', {
   // 系统拖入的 File → 真实路径（Electron 32+ 移除了 File.path，须走 webUtils）
   pathForFile: (file) => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
   // file-promise 类拖拽（如 macOS 截图浮窗缩略图）没有现成路径：把内容落盘到临时目录换一个路径
@@ -39,12 +39,12 @@ contextBridge.exposeInMainWorld('fanboxDrop', {
   copyInto: (srcPath, dir) => ipcRenderer.invoke('drop:copy-into', { srcPath, dir }),
 });
 
-contextBridge.exposeInMainWorld('fanboxShot', {
+contextBridge.exposeInMainWorld('codexboxShot', {
   // 系统截屏落盘事件（截图直通车）
   onNew: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('shot:new', h); return () => ipcRenderer.removeListener('shot:new', h); },
 });
 
-contextBridge.exposeInMainWorld('fanboxUpdate', {
+contextBridge.exposeInMainWorld('codexboxUpdate', {
   onAvailable: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('update:available', h); return () => ipcRenderer.removeListener('update:available', h); },
   get: () => ipcRenderer.invoke('update:get'), // 拉一把启动早期可能错过的推送
   open: (url) => ipcRenderer.invoke('update:open', { url }),
@@ -52,12 +52,12 @@ contextBridge.exposeInMainWorld('fanboxUpdate', {
   onProgress: (cb) => { const h = (e, m) => cb(m); ipcRenderer.on('update:progress', h); return () => ipcRenderer.removeListener('update:progress', h); },
 });
 
-contextBridge.exposeInMainWorld('fanboxWin', {
+contextBridge.exposeInMainWorld('codexboxWin', {
   focus: () => ipcRenderer.invoke('win:focus'), // 点通知拉回前台
   trafficLights: (show) => ipcRenderer.invoke('win:traffic', { show }), // 全屏预览时藏/显左上角系统按钮
 });
 
-contextBridge.exposeInMainWorld('fanboxEnv', {
+contextBridge.exposeInMainWorld('codexboxEnv', {
   isDesktopApp: true,
   platform: process.platform,
 });

@@ -1,16 +1,22 @@
+/**
+ * [INPUT]: 依赖 playwright-core、Electron 入口、假 HOME 和三套界面主题
+ * [OUTPUT]: 对外提供 README 使用的三套 CodexBox 实拍截图
+ * [POS]: experiments/readme-shots 的截图生成入口，用于更新公开产品图片
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 // README 实拍截图：Playwright 驱动 Electron，三套皮肤各一张。
-// 用假 HOME（/tmp/fb-home）跑，避免把真实收藏/最近打开拍进公开截图。
+// 用假 HOME（/tmp/codexbox-home）跑，避免把真实收藏/最近打开拍进公开截图。
 const { _electron } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
 const ROOT = path.resolve(__dirname, '../..');
-const FAKE_HOME = '/tmp/fb-home';
+const FAKE_HOME = '/tmp/codexbox-home';
 
 (async () => {
   for (const d of ['Desktop', 'Documents', 'Downloads']) fs.mkdirSync(path.join(FAKE_HOME, d), { recursive: true });
   const app = await _electron.launch({
     args: [ROOT], cwd: ROOT,
-    env: { ...process.env, HOME: FAKE_HOME, FANBOX_DEV_PORT: '4621' },
+    env: { ...process.env, HOME: FAKE_HOME, CODEXBOX_DEV_PORT: '4621' },
   });
   const win = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }) => {
@@ -19,17 +25,17 @@ const FAKE_HOME = '/tmp/fb-home';
   });
   await win.waitForTimeout(2200);
   // 跳过首次引导弹窗
-  await win.evaluate(() => { localStorage.setItem('fb_guided', '1'); document.querySelector('.guide-overlay')?.remove(); });
-  // 进入 fanbox 仓库本身（吃自己的狗粮）
+  await win.evaluate(() => { localStorage.setItem('codexbox_guided', '1'); document.querySelector('.guide-overlay')?.remove(); });
+  // 进入 codexbox 仓库本身（吃自己的狗粮）
   await win.evaluate((p) => navigate(p), ROOT);
   await win.waitForTimeout(1000);
   // 开终端（dock 在右），跑两条真实命令
   await win.evaluate(() => { term.setDock && term.setDock('right'); });
   await win.evaluate(() => { term.open ? term.open() : $('#btn-terminal')?.click(); });
   await win.waitForTimeout(2000);
-  await win.evaluate(() => window.fanboxPty.input(term.active, 'git log --oneline -6\r'));
+  await win.evaluate(() => window.codexboxPty.input(term.active, 'git log --oneline -6\r'));
   await win.waitForTimeout(1200);
-  await win.evaluate(() => window.fanboxPty.input(term.active, 'ls public/\r'));
+  await win.evaluate(() => window.codexboxPty.input(term.active, 'ls public/\r'));
   await win.waitForTimeout(1200);
   // 预览 README
   await win.evaluate(() => { const e = state.entries.find((x) => x.name === 'README.md'); if (e) openPreview(e); });

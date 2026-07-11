@@ -1,24 +1,30 @@
+<!--
+[INPUT]: 依赖仓库内 assets 产品截图、GitHub Releases 和当前构建运行方式
+[OUTPUT]: 对外提供 CodexBox 产品介绍、安装方式、功能说明和开发指南
+[POS]: 项目根目录的公开说明文档，是用户与贡献者了解 CodexBox 的首要入口
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+-->
 <div align="center">
 
-# 📦 FanBox
+# 📦 CodexBox
 
-<img src="assets/promo-banner.jpg" alt="FanBox · Codex 的本地桌面驾驶舱" width="100%">
+<img src="assets/promo-banner.jpg" alt="CodexBox · Codex 的本地桌面驾驶舱" width="100%">
 
 <br><br>
 
-> *"AI 帮你一个下午起十个项目，然后它们就再也找不到了。FanBox 帮你把它们找回来。"*
-> *"AI spins up ten projects in an afternoon. FanBox helps you find them again."*
+> *"AI 帮你一个下午起十个项目，然后它们就再也找不到了。CodexBox 帮你把它们找回来。"*
+> *"AI spins up ten projects in an afternoon. CodexBox helps you find them again."*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Tit1e/fanbox?label=Release&color=blue)](https://github.com/Tit1e/fanbox/releases/latest)
-[![Platform](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)](https://github.com/Tit1e/fanbox/releases/latest)
+[![Release](https://img.shields.io/github/v/release/Tit1e/codexbox?label=Release&color=blue)](https://github.com/Tit1e/codexbox/releases/latest)
+[![Platform](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)](https://github.com/Tit1e/codexbox/releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-community%20port-lightgrey?logo=windows)](#install)
 [![Runtime](https://img.shields.io/badge/Runtime-no--build-blueviolet)](#architecture)
 
 <br>
 
-**FanBox：Codex 的本地桌面驾驶舱。让 Codex 在本地干活，看清它碰过的每个文件、改过的每一行，随时接手。**<br>
-**FanBox — the local desktop cockpit for Codex: run Codex, see every file and line it changes, and take over anytime.**
+**CodexBox：Codex 的本地桌面驾驶舱。让 Codex 在本地干活，看清它碰过的每个文件、改过的每一行，随时接手。**<br>
+**CodexBox — the local desktop cockpit for Codex: run Codex, see every file and line it changes, and take over anytime.**
 
 <br>
 
@@ -30,30 +36,30 @@ Every time Codex writes a file, its card lights up — *find files → run Codex
 
 <br>
 
-[⬇ 下载 dmg / Download dmg](https://github.com/Tit1e/fanbox/releases/latest) · [Screenshots / 截图](#three-skins) · [Features / 功能](#what-it-does) · [Install / 安装](#install) · [Credits / 致谢](#credits)
+[⬇ 下载 dmg / Download dmg](https://github.com/Tit1e/codexbox/releases/latest) · [Screenshots / 截图](#three-skins) · [Features / 功能](#what-it-does) · [Install / 安装](#install) · [Credits / 致谢](#credits)
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="assets/screenshot-volt.png" alt="FanBox · Volt skin · file browser on the left, README preview at the bottom, embedded terminal on the right" width="100%">
+  <img src="assets/screenshot-volt.png" alt="CodexBox · Volt skin · file browser on the left, README preview at the bottom, embedded terminal on the right" width="100%">
 </p>
 
-<p align="center"><sub>▲ 真机截图：浏览 fanbox 仓库本身，README 原地预览，内嵌终端正在跑 git。本页所有截图均由 Playwright 从实时 App 中直接拍摄，未修图。<br>Real capture: browsing the fanbox repo itself, README previewed in place, git running in the embedded terminal. All screenshots in this README are taken from the live app via Playwright, unedited.</sub></p>
+<p align="center"><sub>▲ 真机截图：浏览 codexbox 仓库本身，README 原地预览，内嵌终端正在跑 git。本页所有截图均由 Playwright 从实时 App 中直接拍摄，未修图。<br>Real capture: browsing the codexbox repo itself, README previewed in place, git running in the embedded terminal. All screenshots in this README are taken from the live app via Playwright, unedited.</sub></p>
 
 ---
 
-<a id="why-fanbox"></a>
-## Why FanBox · 为什么要做 FanBox
+<a id="why-codexbox"></a>
+## Why CodexBox · 为什么要做 CodexBox
 
 Codex 帮你一个下午起十个项目，但它们散在各处、名字认不出、改了啥看不见。每天的真实流程是：Finder 里翻半天 → 切到 iTerm 启 Codex → 再切浏览器看效果，三个窗口来回跳。
 
 Codex helps you start ten projects in an afternoon — then they scatter everywhere, the names stop making sense, and you can't see what got changed. The daily reality: dig through Finder → switch to iTerm to launch Codex → switch to the browser to check results. Three windows, endless hopping.
 
-FanBox 把这条链路收进一个窗口：**左边文件 × 右边/下边终端 × 原地预览**，一个有机整体。它不跟 Finder 拼文件操作，不跟 VS Code 拼编辑，专注「找回 + 预览 + 轻改 + 指挥 Codex」这一条链路做到顺手。
+CodexBox 把这条链路收进一个窗口：**左边文件 × 右边/下边终端 × 原地预览**，一个有机整体。它不跟 Finder 拼文件操作，不跟 VS Code 拼编辑，专注「找回 + 预览 + 轻改 + 指挥 Codex」这一条链路做到顺手。
 
-FanBox folds that loop into one window: **files on the left × terminal on the right/bottom × preview in place**. It doesn't compete with Finder on file ops or VS Code on editing. It does one chain well: *find → preview → light edits → command Codex*.
+CodexBox folds that loop into one window: **files on the left × terminal on the right/bottom × preview in place**. It doesn't compete with Finder on file ops or VS Code on editing. It does one chain well: *find → preview → light edits → command Codex*.
 
 不做云、不做远程、不做账号。本地、零配置、运行时零依赖。
 
@@ -114,8 +120,8 @@ The UI was designed with [huashu-design](https://github.com/alchaincyf/huashu-de
   node-pty + xterm.js (WebGL). Codex / vim / htop render correctly, CJK wide characters included.
 - **拖文件进终端 / Drag files in** — 从文件列表拖文件/文件夹进终端，自动插入路径喂给 Codex 当上下文。
   Drop a file or folder into the terminal to insert its path as Codex context.
-- **路径可点击 / Clickable paths** — 终端里出现的文件路径直接点击在 FanBox 打开；带空格的 macOS 截屏名、中文文件名、折行的长路径都能识别（空格边界由文件系统 stat 验证，不靠猜）。  
-  File paths appearing in terminal output open in FanBox on click; macOS screenshot names with spaces, Chinese filenames and wrapped long paths are all recognized (space boundaries verified by stat, not guessed).
+- **路径可点击 / Clickable paths** — 终端里出现的文件路径直接点击在 CodexBox 打开；带空格的 macOS 截屏名、中文文件名、折行的长路径都能识别（空格边界由文件系统 stat 验证，不靠猜）。
+  File paths appearing in terminal output open in CodexBox on click; macOS screenshot names with spaces, Chinese filenames and wrapped long paths are all recognized (space boundaries verified by stat, not guessed).
 - **选中即甩给终端 / Send selection** — 预览里选一段文字，一键以「文件出处 + 围栏」格式发进终端（bracketed paste 包裹，不会被逐行误执行）。  
   Select text in a preview and fling it into the terminal with file provenance + fencing (bracketed paste, never executed line by line).
 - **态势感知 / Situational awareness** — 标签圆点显示 Codex 运行/空闲/退出；Codex 把球踢回给你时终端边缘呼吸提示「轮到你」，长任务完成发系统通知。
@@ -139,9 +145,9 @@ The UI was designed with [huashu-design](https://github.com/alchaincyf/huashu-de
 
 ### 桌面版（推荐）/ Desktop (recommended)
 
-从 [**Releases**](https://github.com/Tit1e/fanbox/releases/latest) 下载最新 `.dmg`，拖进「应用程序」即可。Apple Silicon (arm64) 原生。
+从 [**Releases**](https://github.com/Tit1e/codexbox/releases/latest) 下载最新 `.dmg`，拖进「应用程序」即可。Apple Silicon (arm64) 原生。
 
-Download the latest `.dmg` from [**Releases**](https://github.com/Tit1e/fanbox/releases/latest) and drag it into Applications. Native Apple Silicon (arm64).
+Download the latest `.dmg` from [**Releases**](https://github.com/Tit1e/codexbox/releases/latest) and drag it into Applications. Native Apple Silicon (arm64).
 
 > 已用 Apple Development 证书签名 + hardened runtime。首次打开若提示「未验证的开发者」：**右键 → 打开 → 确认**即可。  
 > Signed with an Apple Development certificate + hardened runtime. If macOS warns about an unverified developer on first launch: **right-click → Open → confirm**.
@@ -151,11 +157,11 @@ Download the latest `.dmg` from [**Releases**](https://github.com/Tit1e/fanbox/r
 
 ### Windows（社区移植，非官方）/ Windows (community ports, unofficial)
 
-我自己没有 Windows 电脑，没法稳定验证 Windows 版的体验，也不了解 Windows 用户的操作习惯，所以**官方不出 Windows 版**。但社区里有同学基于 FanBox 拓展了 Windows 版本，想在 Windows 上体验的朋友可以试试，谢谢他们的工作 🙏。
+我自己没有 Windows 电脑，没法稳定验证 Windows 版的体验，也不了解 Windows 用户的操作习惯，所以**官方不出 Windows 版**。但社区里有同学基于 CodexBox 拓展了 Windows 版本，想在 Windows 上体验的朋友可以试试，谢谢他们的工作 🙏。
 
 > ⚠️ 这些都不是我的改造，我没有参与开发、也没法对它们的体验和安全负责。请自行评估后使用。
 
-I don't own a Windows machine and can't reliably verify a Windows build or judge what Windows users need, so **there is no official Windows version**. The community has built Windows ports of FanBox — if you're on Windows, give one a try, and thanks to the maintainers 🙏.
+I don't own a Windows machine and can't reliably verify a Windows build or judge what Windows users need, so **there is no official Windows version**. The community has built Windows ports of CodexBox — if you're on Windows, give one a try, and thanks to the maintainers 🙏.
 
 > ⚠️ These are not my builds. I'm not involved in their development and can't vouch for their experience or security. Use at your own discretion.
 
@@ -183,7 +189,7 @@ npm run app          # electron . 启动完整桌面版 / full desktop app
 npm run dist         # 打包签名 .dmg（产物在 dist/，不入 git）/ build & sign the .dmg (output in dist/)
 ```
 
-开发入口 `npm start` 和 `npm run app` 默认跑 `http://localhost:4577`（预览服务 `4578`），正式打包版默认跑 `http://localhost:4567`（预览服务 `4568`），避免本机同时开正式版和开发版时端口冲突。开发环境需要手动指定时使用 `FANBOX_DEV_PORT=xxxx npm start` 或 `FANBOX_DEV_PORT=xxxx npm run app`；正式环境继续使用 `FANBOX_PORT`。
+开发入口 `npm start` 和 `npm run app` 默认跑 `http://localhost:4577`（预览服务 `4578`），正式打包版默认跑 `http://localhost:4567`（预览服务 `4568`），避免本机同时开正式版和开发版时端口冲突。开发环境需要手动指定时使用 `CODEXBOX_DEV_PORT=xxxx npm start` 或 `CODEXBOX_DEV_PORT=xxxx npm run app`；正式环境继续使用 `CODEXBOX_PORT`。
 
 > 打包遇到 Electron 下载被墙：`ELECTRON_MIRROR="https://registry.npmmirror.com/-/binary/electron/" npm run dist`
 
@@ -202,8 +208,8 @@ npm run dist         # 打包签名 .dmg（产物在 dist/，不入 git）/ buil
 
 - 后端只在本机回环地址监听 + 校验 Host 头（挡 DNS rebinding），**数据不出本机**。  
   The backend listens on loopback only and validates the Host header (anti DNS-rebinding). **Data never leaves your machine.**
-- 全部前端资源（含渲染器、字体）本地内置，**离线完全可用**。FanBox 自身仅在检查更新时访问 GitHub。
-  All frontend assets (including renderers and fonts) are vendored locally — **fully usable offline**. FanBox itself only contacts GitHub to check for updates.
+- 全部前端资源（含渲染器、字体）本地内置，**离线完全可用**。CodexBox 自身仅在检查更新时访问 GitHub。
+  All frontend assets (including renderers and fonts) are vendored locally — **fully usable offline**. CodexBox itself only contacts GitHub to check for updates.
 - HTML 预览在隔离 origin 的沙箱 iframe 里渲染，预览不可信网页也碰不到终端能力。  
   HTML previews render in a sandboxed iframe with an opaque origin; an untrusted page can never reach terminal capabilities.
 - 配置写入走串行化读-改-写 + 原子写（temp + fsync + rename），不丢数据、不留半截 JSON。  
@@ -225,9 +231,9 @@ Each development phase is reviewed by **5 independent subagents** playing differ
 <a id="credits"></a>
 ## Standing on the shoulders of giants · 建在巨人肩膀上
 
-FanBox 的核心能力来自这些出色的开源项目：
+CodexBox 的核心能力来自这些出色的开源项目：
 
-FanBox's core capabilities come from these excellent open-source projects:
+CodexBox's core capabilities come from these excellent open-source projects:
 
 | 项目 / Project | 用在哪 / Used for | License |
 |---|---|---|
@@ -261,14 +267,14 @@ Every frontend dependency is vendored locally (`public/vendor/`) — that's what
 <summary>项目结构 / Project layout</summary>
 
 ```
-fanbox/
+codexbox/
 ├── server.js               # 零依赖 Node 后端（文件 API + 缩略图 + 静态服务）
 │                           # Zero-dependency Node backend (file APIs + thumbnails + static)
 ├── electron/
 │   ├── main.js             # 主进程（窗口/pty/剪贴板/fs.watch/菜单）
 │   │                       # Main process (window/pty/clipboard/fs.watch/menu)
-│   └── preload.js          # 暴露 fanboxPty / fanboxFs / fanboxClipboard
-│                           # Exposes fanboxPty / fanboxFs / fanboxClipboard
+│   └── preload.js          # 暴露 codexboxPty / codexboxFs / codexboxClipboard
+│                           # Exposes codexboxPty / codexboxFs / codexboxClipboard
 ├── public/
 │   ├── index.html
 │   ├── style.css
@@ -311,8 +317,8 @@ More AI creations:
 
 <div align="center">
 
-**Finder** 帮你管理文件。**IDE** 帮你写代码。**FanBox** 帮你看清 AI 在你机器上干了什么。<br>
-**Finder** manages your files. **IDEs** write your code. **FanBox** shows you what AI did on your machine.<br><br>
+**Finder** 帮你管理文件。**IDE** 帮你写代码。**CodexBox** 帮你看清 AI 在你机器上干了什么。<br>
+**Finder** manages your files. **IDEs** write your code. **CodexBox** shows you what AI did on your machine.<br><br>
 
 MIT License © [花叔 Huashu](https://github.com/alchaincyf)
 

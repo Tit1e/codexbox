@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 playwright-core、Electron 入口、xterm 6 插件和假 HOME 测试目录
+ * [OUTPUT]: 对外提供 xterm 6、WebGL、中文输入和滚动行为的自动化验收
+ * [POS]: experiments/xterm6-upgrade-202607 的主回归入口
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
 // xterm 6.0 升级 + 中文乱码三方案的自动化验收：Playwright 驱动 Electron（假 HOME，不碰真实数据）。
 // 覆盖：①6.0 冷启动/列宽/PTY 对齐 ②WebGL addon 挂载 ③CJK 宽度（unicode11） ④IME CapsLock（6.0 原生补丁）
 // ⑤atlasCare 忙时清理 ⑥atlasCare 收工兜底 ⑦setWebgl 关（含新标签遵守） ⑧setWebgl 开
@@ -7,18 +13,18 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '../..');
-const HOME = '/tmp/fb-verify-xterm6-home';
+const HOME = '/tmp/codexbox-verify-xterm6-home';
 let fails = 0;
 const check = (ok, name, detail) => { console.log((ok ? 'PASS' : 'FAIL') + ': ' + name + (detail ? ' — ' + detail : '')); if (!ok) fails++; };
 setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 180000);
 
 (async () => {
   for (const d of ['Desktop', 'Documents', 'Downloads']) fs.mkdirSync(path.join(HOME, d), { recursive: true });
-  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, FANBOX_DEV_PORT: '4641' } });
+  const app = await _electron.launch({ executablePath: require(path.join(ROOT, 'node_modules/electron')), args: [ROOT], cwd: ROOT, env: { ...process.env, HOME, CODEXBOX_DEV_PORT: '4641' } });
   const win = await app.firstWindow();
   await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.setSize(1560, 950); w.center(); });
   await win.waitForTimeout(2200);
-  await win.evaluate(() => { localStorage.setItem('fb_guided', '1'); localStorage.setItem('fb_term_open', '1'); localStorage.setItem('fb_term_dock', 'bottom'); });
+  await win.evaluate(() => { localStorage.setItem('codexbox_guided', '1'); localStorage.setItem('codexbox_term_open', '1'); localStorage.setItem('codexbox_term_dock', 'bottom'); });
   await win.evaluate(() => location.reload()).catch(() => {});
   await win.waitForTimeout(2500);
 
@@ -115,7 +121,7 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 1
     await term.newTab();
     await new Promise((r) => setTimeout(r, 800));
     const sNew = term.sessions.find((x) => x.id === term.active);
-    return { allOff, domRows, ls: localStorage.getItem('fanbox.noWebgl'), newTabOff: !sNew.webgl };
+    return { allOff, domRows, ls: localStorage.getItem('codexbox.noWebgl'), newTabOff: !sNew.webgl };
   });
   check(off.allOff && off.domRows > 0 && off.ls === '1' && off.newTabOff, 'setWebgl(false) 即时生效+新标签遵守', JSON.stringify(off));
 
@@ -123,7 +129,7 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 1
   const on = await win.evaluate(async () => {
     term.setWebgl(true);
     await new Promise((r) => setTimeout(r, 300));
-    return { allOn: term.sessions.every((s) => !!s.webgl), ls: localStorage.getItem('fanbox.noWebgl') };
+    return { allOn: term.sessions.every((s) => !!s.webgl), ls: localStorage.getItem('codexbox.noWebgl') };
   });
   check(on.allOn && on.ls === null, 'setWebgl(true) 全标签恢复', JSON.stringify(on));
 
@@ -137,10 +143,10 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 1
     const initChecked = cb.checked;
     cb.checked = false; cb.dispatchEvent(new Event('change'));
     await new Promise((r) => setTimeout(r, 200));
-    const afterOff = { ls: localStorage.getItem('fanbox.noWebgl'), webgl: term.sessions.every((s) => !s.webgl) };
+    const afterOff = { ls: localStorage.getItem('codexbox.noWebgl'), webgl: term.sessions.every((s) => !s.webgl) };
     cb.checked = true; cb.dispatchEvent(new Event('change'));
     await new Promise((r) => setTimeout(r, 200));
-    const afterOn = { ls: localStorage.getItem('fanbox.noWebgl'), webgl: term.sessions.every((s) => !!s.webgl) };
+    const afterOn = { ls: localStorage.getItem('codexbox.noWebgl'), webgl: term.sessions.every((s) => !!s.webgl) };
     agentsPop.close();
     return { hasCb: true, initChecked, afterOff, afterOn, agentSame: JSON.stringify(agentState.enabled) === before };
   });
@@ -185,7 +191,7 @@ setTimeout(() => { console.error('FAIL: watchdog 超时'); process.exit(2); }, 1
   await win.screenshot({ path: path.join(__dirname, 'shots', 'xterm6-cjk.png') });
 
   console.log(fails === 0 ? '\n全部通过 ✅' : '\n有 ' + fails + ' 项失败 ❌');
-  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.fanboxPty.kill(s.id); } catch { /* */ } }));
+  await win.evaluate(() => term.sessions.slice().forEach((s) => { try { window.codexboxPty.kill(s.id); } catch { /* */ } }));
   await win.waitForTimeout(400);
   await app.close().catch(() => {});
   setTimeout(() => process.exit(fails === 0 ? 0 : 1), 1200);

@@ -189,19 +189,19 @@ window.__svgVideo = richIcon({ name: '_.mp4', kind: 'video' }, 40);
 
 const state = {
   cwd: null, home: null, platform: 'darwin', sep: '/',
-  theme: localStorage.getItem('fb_theme') || 'warm',
+  theme: localStorage.getItem('codexbox_theme') || 'warm',
   entries: [], project: null, history: [],
-  view: localStorage.getItem('fb_view') || 'grid',
-  gridSize: localStorage.getItem('fb_gridsize') || 'sm',
-  sort: localStorage.getItem('fb_sort') || 'name',
-  showHidden: localStorage.getItem('fb_hidden') === '1',
+  view: localStorage.getItem('codexbox_view') || 'grid',
+  gridSize: localStorage.getItem('codexbox_gridsize') || 'sm',
+  sort: localStorage.getItem('codexbox_sort') || 'name',
+  showHidden: localStorage.getItem('codexbox_hidden') === '1',
   filter: '', selected: null, cursor: -1, cols: 1, visible: [],
   favorites: [], recentOpened: [],
-  previewW: Number(localStorage.getItem('fb_preview_w')) || 0, // 0 = 用户还没拖过，走 1:2 比例默认
-  previewH: Number(localStorage.getItem('fb_preview_h')) || 0,
-  sidebarCollapsed: localStorage.getItem('fb_sidebar_collapsed') === '1',
-  sidebarW: Math.min(420, Math.max(190, Number(localStorage.getItem('fb_sidebar_w')) || 248)),
-  muted: localStorage.getItem('fb_muted') === '1', // WOW4 提示音静音开关
+  previewW: Number(localStorage.getItem('codexbox_preview_w')) || 0, // 0 = 用户还没拖过，走 1:2 比例默认
+  previewH: Number(localStorage.getItem('codexbox_preview_h')) || 0,
+  sidebarCollapsed: localStorage.getItem('codexbox_sidebar_collapsed') === '1',
+  sidebarW: Math.min(420, Math.max(190, Number(localStorage.getItem('codexbox_sidebar_w')) || 248)),
+  muted: localStorage.getItem('codexbox_muted') === '1', // WOW4 提示音静音开关
 };
 
 // ---------- 工具 ----------
@@ -286,12 +286,12 @@ async function navigate(p, pushHistory = true) {
 }
 // 汇总当前要监听的目录：浏览目录 + 每个终端会话的项目目录，发给主进程做增量监听
 function updateWatches() {
-  if (!window.fanboxFs) return;
+  if (!window.codexboxFs) return;
   const dirs = new Set();
   if (state.cwd) dirs.add(state.cwd);
   if (typeof term !== 'undefined') term.sessions.forEach((s) => { if (s.startDir) dirs.add(s.startDir); });
-  if (window.fanboxFs.watchSet) window.fanboxFs.watchSet([...dirs]);
-  else window.fanboxFs.watch(state.cwd); // 旧版主进程兜底
+  if (window.codexboxFs.watchSet) window.codexboxFs.watchSet([...dirs]);
+  else window.codexboxFs.watch(state.cwd); // 旧版主进程兜底
 }
 // shell 单引号转义（用于把路径塞进终端 cd 命令）
 function shQuote(s) { return `'${String(s).replace(/'/g, `'\\''`)}'`; }
@@ -458,7 +458,7 @@ function bindItem(el, e) {
   el.draggable = true;
   el.addEventListener('dragstart', (ev) => {
     ev.dataTransfer.setData('text/plain', e.path);
-    ev.dataTransfer.setData('application/x-fanbox-path', e.path);
+    ev.dataTransfer.setData('application/x-codexbox-path', e.path);
     // 拖图片进 md 编辑器：插入原文件路径引用。不带这条时浏览器默认抓的是卡片缩略图的
     // /api/thumb?w=160 链接，低清且写进文档发出去就裂
     if (e.kind === 'image') ev.dataTransfer.setData('text/html', `<img src="${escapeHtml(encodeURI(e.path))}" alt="${escapeHtml(e.name)}">`);
@@ -475,15 +475,15 @@ function bindItem(el, e) {
 // 把系统拖入的文件（Finder 文件 / 截图浮窗缩略图）存进目标目录：
 // 有真实路径就复制进去，没路径（file-promise）就把字节直接写进去。仿终端那套口径。
 async function dropFilesInto(fileList, dir) {
-  if (!window.fanboxDrop || !dir) { toast('该环境不支持拖入保存', true); return; }
+  if (!window.codexboxDrop || !dir) { toast('该环境不支持拖入保存', true); return; }
   const files = [...(fileList || [])];
   if (!files.length) return;
   let saved = 0, lastPath = null;
   for (const f of files) {
-    const src = window.fanboxDrop.pathForFile(f);
+    const src = window.codexboxDrop.pathForFile(f);
     let r;
-    if (src) r = await window.fanboxDrop.copyInto(src, dir).catch(() => null);
-    else r = await window.fanboxDrop.saveInto(dir, f.name, await f.arrayBuffer()).catch(() => null);
+    if (src) r = await window.codexboxDrop.copyInto(src, dir).catch(() => null);
+    else r = await window.codexboxDrop.saveInto(dir, f.name, await f.arrayBuffer()).catch(() => null);
     if (r && r.ok) { saved++; lastPath = r.path; }
   }
   if (!saved) { toast('存入失败', true); return; }
@@ -494,7 +494,7 @@ async function dropFilesInto(fileList, dir) {
 // 拖入 app 内/外部的图片（预览里的图等都是 <img>，拖动带的是图片 URL 而非系统文件）：
 // 取 URL → fetch 出字节 → 存进目标目录。只收图片，非图片忽略。
 async function dropUrlInto(url, dir) {
-  if (!window.fanboxDrop || !dir) { toast('该环境不支持拖入保存', true); return; }
+  if (!window.codexboxDrop || !dir) { toast('该环境不支持拖入保存', true); return; }
   url = (String(url || '').split(/[\r\n]/).find((l) => l && !l.trim().startsWith('#')) || '').trim(); // uri-list 可能多行/含 # 注释
   if (!url) return;
   let blob;
@@ -505,7 +505,7 @@ async function dropUrlInto(url, dir) {
   let name = '';
   try { name = baseOf(decodeURIComponent(new URL(url, location.href).pathname)); } catch { /* blob:/data: 无 pathname */ }
   if (!name || !/\.[a-z0-9]+$/i.test(name)) name = `image-${Date.now()}.${e}`;
-  const r = await window.fanboxDrop.saveInto(dir, name, await blob.arrayBuffer()).catch(() => null);
+  const r = await window.codexboxDrop.saveInto(dir, name, await blob.arrayBuffer()).catch(() => null);
   if (!r || !r.ok) { toast('存入失败', true); return; }
   const where = dir === state.cwd ? '' : '「' + baseOf(dir) + '」';
   toast(`已存入${where} ${baseOf(r.path)}`);
@@ -516,7 +516,7 @@ function makeDraggablePath(el, p) {
   el.draggable = true;
   el.addEventListener('dragstart', (ev) => {
     ev.dataTransfer.setData('text/plain', p);
-    ev.dataTransfer.setData('application/x-fanbox-path', p);
+    ev.dataTransfer.setData('application/x-codexbox-path', p);
     ev.dataTransfer.effectAllowed = 'copy';
   });
 }
@@ -683,7 +683,7 @@ function renderHtmlPreview(data, meta) {
   };
   const onMsg = (ev) => {
     if (!frame.isConnected || ev.source !== frame.contentWindow) return;
-    const w = ev.data && ev.data.fanboxPreviewWidth;
+    const w = ev.data && ev.data.codexboxPreviewWidth;
     if (typeof w === 'number' && w > 0 && w !== natW) { natW = w; applyFit(); }
   };
   // 上一个 HTML 预览的监听先拆掉（切文件时旧 iframe 已 detach，监听只剩泄漏）
@@ -718,7 +718,7 @@ async function showDiff(e) {
 function renderPreviewActions(e) {
   const box = $('#preview-actions');
   box.innerHTML = '';
-  const clip = window.fanboxClipboard;
+  const clip = window.codexboxClipboard;
   // 图标为主、文字精简：主操作「打开」留字，其余只留图标 + tooltip
   const acts = [
     { id: 'preview-maxbtn', icon: ic(previewMax ? 'minimize' : 'maximize', 'currentColor', 15), title: previewMax ? '退出全屏' : '全屏放大', fn: () => setPreviewMax() },
@@ -755,8 +755,8 @@ function renderPreviewFoot(e) {
   if (!e || e.isDir) { f.innerHTML = ''; return; }
   f.innerHTML = `<span title="大小">${e.size ? fmtSize(e.size) : '0 B'}</span><span title="创建时间">创建 ${fmtDateTime(e.btime)}</span><span title="修改时间">改 ${fmtDateTime(e.mtime)}</span>`;
 }
-async function copyImage(p) { const r = await window.fanboxClipboard.copyImage(p); toast(r.ok ? '已复制图片，可粘贴到其它应用' : '复制图片失败：' + (r.error || ''), !r.ok); }
-async function copyFile(p) { const r = await window.fanboxClipboard.copyFile(p); toast(r.ok ? '已复制文件，可在访达里粘贴' : '复制文件失败', !r.ok); }
+async function copyImage(p) { const r = await window.codexboxClipboard.copyImage(p); toast(r.ok ? '已复制图片，可粘贴到其它应用' : '复制图片失败：' + (r.error || ''), !r.ok); }
+async function copyFile(p) { const r = await window.codexboxClipboard.copyFile(p); toast(r.ok ? '已复制文件，可在访达里粘贴' : '复制文件失败', !r.ok); }
 async function closePreview() {
   if (!await guardDirty()) return;
   mona.disposeIfAny(); crepe.disposeIfAny(); imgEditState = null;
@@ -865,7 +865,7 @@ function bindSidebarResizer() {
     document.body.style.userSelect = ''; document.body.style.cursor = '';
     if (raf) { cancelAnimationFrame(raf); raf = null; }
     apply();
-    localStorage.setItem('fb_sidebar_w', state.sidebarW);
+    localStorage.setItem('codexbox_sidebar_w', state.sidebarW);
   });
 }
 // 预览尺寸随 dock 翻转：终端在右→预览在下方用高度，否则用宽度
@@ -898,14 +898,14 @@ function restoreFileAreaIfHidden() {
   const mb = $('#main-body');
   if (mb && mb.classList.contains('fm-squeezed')) { // 拖成全铺：文件区被压没，退出并给终端一个 2/3 的默认尺寸
     mb.classList.remove('fm-squeezed');
-    localStorage.setItem('fb_term_squeeze', '0');
+    localStorage.setItem('codexbox_term_squeeze', '0');
     const r = mb.getBoundingClientRect();
     if (term.dock === 'bottom') {
       const h = r.height ? Math.round(r.height * 2 / 3) : 280;
-      panel.style.height = h + 'px'; localStorage.setItem('fb_term_h', h);
+      panel.style.height = h + 'px'; localStorage.setItem('codexbox_term_h', h);
     } else {
       const w = r.width ? Math.round(r.width * 2 / 3) : 480;
-      panel.style.width = w + 'px'; localStorage.setItem('fb_term_w', w);
+      panel.style.width = w + 'px'; localStorage.setItem('codexbox_term_w', w);
     }
     animateLayout(); term.fitActive();
   }
@@ -924,7 +924,7 @@ function setPreviewMax(on) {
   $('#preview').classList.toggle('is-max', previewMax);
   document.documentElement.classList.toggle('preview-maxed', previewMax); // 全屏期间关掉顶栏 drag 区，否则它会吞预览按钮的点击
   // 全屏时藏掉左上角红黄绿系统按钮（和右侧自家关闭图标太像），退出再显回来
-  try { window.fanboxWin?.trafficLights(!previewMax); } catch { /* 浏览器版无此桥 */ }
+  try { window.codexboxWin?.trafficLights(!previewMax); } catch { /* 浏览器版无此桥 */ }
   const b = $('#preview-maxbtn');
   if (b) { b.innerHTML = ic(previewMax ? 'minimize' : 'maximize', 'currentColor', 15); b.dataset.tip = previewMax ? '退出全屏' : '全屏放大'; }
 }
@@ -940,7 +940,7 @@ function toggleSidebar(force) {
     if (oldMw > 0) frac = panel.getBoundingClientRect().width / oldMw;
   }
   state.sidebarCollapsed = force === undefined ? !state.sidebarCollapsed : force;
-  localStorage.setItem('fb_sidebar_collapsed', state.sidebarCollapsed ? '1' : '0');
+  localStorage.setItem('codexbox_sidebar_collapsed', state.sidebarCollapsed ? '1' : '0');
   $('#app').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
   $('#btn-sidebar')?.classList.toggle('on', state.sidebarCollapsed);
   applyLayout();
@@ -948,7 +948,7 @@ function toggleSidebar(force) {
     const newMw = oldMw + (state.sidebarCollapsed ? state.sidebarW : -state.sidebarW); // 主区列 ±侧栏宽
     const tw = Math.max(280, Math.min(newMw - 480, Math.round(newMw * frac))); // 终端/文件区各留最小宽
     panel.style.width = tw + 'px';
-    localStorage.setItem('fb_term_w', tw);
+    localStorage.setItem('codexbox_term_w', tw);
     term.fitActive();
   }
 }
@@ -1516,8 +1516,8 @@ function confirmDialog(msg) {
 const shotTray = {
   el: null, timer: null,
   init() {
-    if (!window.fanboxShot) return; // 浏览器版没有截屏监听
-    window.fanboxShot.onNew((m) => this.show(m));
+    if (!window.codexboxShot) return; // 浏览器版没有截屏监听
+    window.codexboxShot.onNew((m) => this.show(m));
   },
   show(m) {
     this.dismiss();
@@ -1904,7 +1904,7 @@ function hlTerm(text, term) {
 
 // ---------- 首次引导 ----------
 function maybeShowGuide() {
-  if (localStorage.getItem('fb_guided')) return;
+  if (localStorage.getItem('codexbox_guided')) return;
   const ov = document.createElement('div');
   ov.className = 'guide-overlay';
   ov.innerHTML = `<div class="guide-card">
@@ -1920,7 +1920,7 @@ function maybeShowGuide() {
     <button id="guide-ok">开始使用</button>
   </div>`;
   document.body.appendChild(ov);
-  $('#guide-ok').onclick = () => { localStorage.setItem('fb_guided', '1'); ov.remove(); };
+  $('#guide-ok').onclick = () => { localStorage.setItem('codexbox_guided', '1'); ov.remove(); };
 }
 
 // ---------- 预览面板拖拽调宽 ----------
@@ -1941,8 +1941,8 @@ function bindResizer() {
   window.addEventListener('mouseup', () => {
     if (!dragging) return;
     dragging = false; handle.classList.remove('dragging'); document.body.style.userSelect = '';
-    localStorage.setItem('fb_preview_w', state.previewW);
-    localStorage.setItem('fb_preview_h', state.previewH || 340);
+    localStorage.setItem('codexbox_preview_w', state.previewW);
+    localStorage.setItem('codexbox_preview_h', state.previewH || 340);
   });
 }
 
@@ -1997,15 +1997,15 @@ function bindTerminalResizer() {
     if (raf) { cancelAnimationFrame(raf); raf = null; }
     apply(); fitNow();
     const panel = $('#terminal-panel');
-    localStorage.setItem('fb_term_squeeze', squeeze ? '1' : '0');
-    if (term.dock === 'bottom') localStorage.setItem('fb_term_h', parseInt(panel.style.height, 10) || 280);
-    else localStorage.setItem('fb_term_w', parseInt(panel.style.width, 10) || 480);
+    localStorage.setItem('codexbox_term_squeeze', squeeze ? '1' : '0');
+    if (term.dock === 'bottom') localStorage.setItem('codexbox_term_h', parseInt(panel.style.height, 10) || 280);
+    else localStorage.setItem('codexbox_term_w', parseInt(panel.style.width, 10) || 480);
   });
 }
 
 // ---------- Codex 快速启动与终端设置 ----------
 function codexResumeLast() {
-  try { return localStorage.getItem('fb_codex_resume_last') !== '0'; } catch { return true; }
+  try { return localStorage.getItem('codexbox_codex_resume_last') !== '0'; } catch { return true; }
 }
 function syncCodexLaunchHint() {
   const btn = $('#term-codex');
@@ -2035,7 +2035,7 @@ const terminalSettingsPop = {
         <span>Codex 提示音</span>
       </label>
       <label class="tsp-row" title="长时间中文输出偶发乱码时可关掉：改用兼容渲染（DOM），立即生效，稍慢但稳">
-        <input type="checkbox" data-setting="webgl" ${(() => { try { return localStorage.getItem('fanbox.noWebgl') === '1' ? '' : 'checked'; } catch { return 'checked'; } })()}>
+        <input type="checkbox" data-setting="webgl" ${(() => { try { return localStorage.getItem('codexbox.noWebgl') === '1' ? '' : 'checked'; } catch { return 'checked'; } })()}>
         <span>WebGL 加速渲染</span>
       </label>`;
     document.body.appendChild(pop);
@@ -2045,13 +2045,13 @@ const terminalSettingsPop = {
     pop.style.right = Math.max(8, Math.round(window.innerWidth - r.right - 8)) + 'px';
     this.el = pop;
     pop.querySelector('[data-setting="resume-last"]').onchange = (ev) => {
-      localStorage.setItem('fb_codex_resume_last', ev.target.checked ? '1' : '0');
+      localStorage.setItem('codexbox_codex_resume_last', ev.target.checked ? '1' : '0');
       syncCodexLaunchHint();
       toast(ev.target.checked ? '一键启动将继续最近 Codex 会话' : '一键启动将创建新的 Codex 会话');
     };
     pop.querySelector('[data-setting="chime"]').onchange = (ev) => {
       state.muted = !ev.target.checked;
-      localStorage.setItem('fb_muted', state.muted ? '1' : '0');
+      localStorage.setItem('codexbox_muted', state.muted ? '1' : '0');
       if (!state.muted) playChime('tick');
       toast(state.muted ? 'Codex 提示音已关闭' : 'Codex 提示音已开启');
     };
@@ -2120,7 +2120,7 @@ function bindEvents() {
   const tp = $('#terminal-panel');
   tp.addEventListener('dragover', (ev) => {
     const t = ev.dataTransfer.types;
-    if (!t.includes('Files') && !t.includes('application/x-fanbox-path') && !t.includes('text/plain')) return;
+    if (!t.includes('Files') && !t.includes('application/x-codexbox-path') && !t.includes('text/plain')) return;
     ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; tp.classList.add('term-drop');
   });
   tp.addEventListener('dragleave', (ev) => { if (!tp.contains(ev.relatedTarget)) tp.classList.remove('term-drop'); });
@@ -2128,18 +2128,18 @@ function bindEvents() {
     ev.preventDefault(); tp.classList.remove('term-drop');
     // 系统拖入（Finder 文件 / 截图浮窗缩略图）：有真实路径直接用；file-promise 没路径就落盘临时目录
     const files = ev.dataTransfer.files ? [...ev.dataTransfer.files] : [];
-    if (files.length && window.fanboxDrop) {
+    if (files.length && window.codexboxDrop) {
       for (const f of files) {
-        let p = window.fanboxDrop.pathForFile(f);
+        let p = window.codexboxDrop.pathForFile(f);
         if (!p) {
-          const r = await window.fanboxDrop.saveTemp(f.name, await f.arrayBuffer()).catch(() => null);
+          const r = await window.codexboxDrop.saveTemp(f.name, await f.arrayBuffer()).catch(() => null);
           if (r && r.ok) p = r.path;
         }
         if (p) term.insertPath(p);
       }
       return;
     }
-    const p = ev.dataTransfer.getData('application/x-fanbox-path') || ev.dataTransfer.getData('text/plain');
+    const p = ev.dataTransfer.getData('application/x-codexbox-path') || ev.dataTransfer.getData('text/plain');
     if (p) term.insertPath(p);
   });
   // 全局兜底：文件拖到窗口其它区域松手时，阻止 Electron 导航到 file:// 顶掉整个界面
@@ -2163,9 +2163,9 @@ function bindEvents() {
   $('#file-area').addEventListener('contextmenu', blankMenu);
   // 拖入文件区 = 存进当前目录；拖到某文件夹图标上 = 存进那个文件夹（截图浮窗、Finder 文件都行）。
   // 接两类：①「外部文件」拖入（dataTransfer 里有 Files）；② app 内/外部图片拖入（带 text/uri-list 的 <img>，如预览里的图）。
-  // fanbox 内部路径拖拽（带 application/x-fanbox-path，拖去终端用）排除在外，不受影响。
+  // codexbox 内部路径拖拽（带 application/x-codexbox-path，拖去终端用）排除在外，不受影响。
   const fileArea = $('#file-area');
-  const droppableTypes = (t) => t.includes('Files') || (t.includes('text/uri-list') && !t.includes('application/x-fanbox-path'));
+  const droppableTypes = (t) => t.includes('Files') || (t.includes('text/uri-list') && !t.includes('application/x-codexbox-path'));
   const clearDropHi = () => { fileArea.classList.remove('area-drop'); fileArea.querySelectorAll('.item.drop-into').forEach((x) => x.classList.remove('drop-into')); };
   fileArea.addEventListener('dragover', (ev) => {
     if (!droppableTypes(ev.dataTransfer.types)) return;
@@ -2180,7 +2180,7 @@ function bindEvents() {
   fileArea.addEventListener('drop', async (ev) => {
     const dt = ev.dataTransfer;
     const hasFiles = dt.files && dt.files.length;
-    const url = (!hasFiles && dt.types.includes('text/uri-list') && !dt.types.includes('application/x-fanbox-path')) ? dt.getData('text/uri-list') : '';
+    const url = (!hasFiles && dt.types.includes('text/uri-list') && !dt.types.includes('application/x-codexbox-path')) ? dt.getData('text/uri-list') : '';
     if (!hasFiles && !url) return;
     ev.preventDefault(); clearDropHi();
     const item = ev.target.closest('.item');
@@ -2196,19 +2196,19 @@ function bindEvents() {
   $('#scope-toggle').onclick = () => cmdk.toggleScope();
 
   $('#toggle-hidden').checked = state.showHidden;
-  $('#toggle-hidden').onchange = (e) => { state.showHidden = e.target.checked; localStorage.setItem('fb_hidden', state.showHidden ? '1' : '0'); renderFiles(); };
+  $('#toggle-hidden').onchange = (e) => { state.showHidden = e.target.checked; localStorage.setItem('codexbox_hidden', state.showHidden ? '1' : '0'); renderFiles(); };
 
   $('#sort-seg').querySelectorAll('button').forEach((b) => {
     b.classList.toggle('active', b.dataset.sort === state.sort);
-    b.onclick = () => { state.sort = b.dataset.sort; localStorage.setItem('fb_sort', state.sort); $('#sort-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
+    b.onclick = () => { state.sort = b.dataset.sort; localStorage.setItem('codexbox_sort', state.sort); $('#sort-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
   });
   $('#view-seg').querySelectorAll('button').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === state.view);
-    b.onclick = () => { state.view = b.dataset.view; localStorage.setItem('fb_view', state.view); $('#view-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); updateGridSizeVisibility(); renderFiles(); };
+    b.onclick = () => { state.view = b.dataset.view; localStorage.setItem('codexbox_view', state.view); $('#view-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); updateGridSizeVisibility(); renderFiles(); };
   });
   $('#gridsize-seg').querySelectorAll('button').forEach((b) => {
     b.classList.toggle('active', b.dataset.size === state.gridSize);
-    b.onclick = () => { state.gridSize = b.dataset.size; localStorage.setItem('fb_gridsize', state.gridSize); $('#gridsize-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
+    b.onclick = () => { state.gridSize = b.dataset.size; localStorage.setItem('codexbox_gridsize', state.gridSize); $('#gridsize-seg').querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b)); renderFiles(); };
   });
   updateGridSizeVisibility();
 
@@ -2229,7 +2229,7 @@ function bindEvents() {
       return;
     }
     if (lbOpen) { if (e.key === 'Escape') document.querySelector('.lightbox').remove(); return; }
-    const primaryShortcut = window.fanboxEnv?.platform === 'darwin' ? e.metaKey : (e.ctrlKey || e.metaKey);
+    const primaryShortcut = window.codexboxEnv?.platform === 'darwin' ? e.metaKey : (e.ctrlKey || e.metaKey);
     const terminalTabShortcut = primaryShortcut && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key);
     if (terminalTabShortcut && !document.querySelector('.input-overlay')) {
       e.preventDefault();
@@ -2268,7 +2268,7 @@ function applyTheme(skin, rerender = true) {
   if (!['terminal', 'warm', 'editorial'].includes(skin)) skin = 'terminal';
   state.theme = skin;
   document.documentElement.dataset.theme = skin;
-  localStorage.setItem('fb_theme', skin);
+  localStorage.setItem('codexbox_theme', skin);
   const link = document.getElementById('hljs-theme');
   if (link) link.href = '/vendor/hljs/styles/' + (skin === 'terminal' ? 'github-dark' : 'github') + '.min.css';
   document.querySelectorAll('#theme-switch .theme-seg button').forEach((b) => b.classList.toggle('active', b.dataset.skin === skin));
@@ -2290,8 +2290,8 @@ function applyTheme(skin, rerender = true) {
 const TERM_ASK_RE = /(Do you want to (proceed|continue|make this edit|allow|use this)|Would you like to proceed|Ready to code\?|created or one you trust\?|tell Codex what to do differently|Yes, and don't ask again|Allow Codex to (run|apply|create)|Codex wants to|[❯›][ \t]*1\.[ \t]*Yes)/;
 const term = {
   sessions: [], seq: 0, active: null, maximized: false,
-  dock: localStorage.getItem('fb_term_dock') || 'right',
-  available() { return !!(window.fanboxPty && window.Terminal && !window.__noXterm); },
+  dock: localStorage.getItem('codexbox_term_dock') || 'right',
+  available() { return !!(window.codexboxPty && window.Terminal && !window.__noXterm); },
   // 每套皮肤一整套手调 ANSI 主题——暗皮肤暗终端、亮皮肤亮终端，不再出现「暖纸里嵌黑块」
   themes: {
     terminal: {
@@ -2323,8 +2323,8 @@ const term = {
     if (!this.sessions.length) this.newTab();
     else this.fitActive();
     $('#btn-terminal').classList.add('active');
-    localStorage.setItem('fb_term_open', '1');
-    if (!localStorage.getItem('fb_term_draghint')) { localStorage.setItem('fb_term_draghint', '1'); setTimeout(() => toast('提示：把左侧文件 / 文件夹拖进终端，即插入路径喂给 Codex'), 700); }
+    localStorage.setItem('codexbox_term_open', '1');
+    if (!localStorage.getItem('codexbox_term_draghint')) { localStorage.setItem('codexbox_term_draghint', '1'); setTimeout(() => toast('提示：把左侧文件 / 文件夹拖进终端，即插入路径喂给 Codex'), 700); }
   },
   close() {
     if (this.maximized) this.toggleMax(false); // 铺满状态下收起终端，term-max 不清会把文件区一起藏没
@@ -2332,7 +2332,7 @@ const term = {
     $('#terminal-resizer').classList.add('hidden');
     $('#main-body').classList.remove('fm-squeezed'); // 终端收起后文件区必须回来
     $('#btn-terminal').classList.remove('active');
-    localStorage.setItem('fb_term_open', '0');
+    localStorage.setItem('codexbox_term_open', '0');
   },
   applyDock() {
     const mb = $('#main-body');
@@ -2340,15 +2340,15 @@ const term = {
     mb.classList.toggle('dock-right', this.dock === 'right');
     // 全铺状态只在终端可见时恢复，否则文件区会凭空消失
     const termOpen = !$('#terminal-panel').classList.contains('hidden');
-    mb.classList.toggle('fm-squeezed', termOpen && localStorage.getItem('fb_term_squeeze') === '1');
+    mb.classList.toggle('fm-squeezed', termOpen && localStorage.getItem('codexbox_term_squeeze') === '1');
     const panel = $('#terminal-panel');
     // 首次开终端：文件区:终端 = 1:2，终端占主区 2/3（用户拖过 resizer 后用记下的 px）
     const mbr = mb.getBoundingClientRect();
     if (this.dock === 'bottom') {
-      const h = Number(localStorage.getItem('fb_term_h')) || (mbr.height ? Math.round(mbr.height * 2 / 3) : 280);
+      const h = Number(localStorage.getItem('codexbox_term_h')) || (mbr.height ? Math.round(mbr.height * 2 / 3) : 280);
       panel.style.height = h + 'px'; panel.style.width = '';
     } else {
-      const w = Number(localStorage.getItem('fb_term_w')) || (mbr.width ? Math.round(mbr.width * 2 / 3) : 480);
+      const w = Number(localStorage.getItem('codexbox_term_w')) || (mbr.width ? Math.round(mbr.width * 2 / 3) : 480);
       panel.style.width = w + 'px'; panel.style.height = '';
     }
     applyPreviewSize(); // 预览随 dock 翻转轴向
@@ -2356,7 +2356,7 @@ const term = {
   },
   setDock(d) {
     if (this.maximized) this.toggleMax(false); // 铺满下切布局看不出任何变化，先退出铺满让分屏可见
-    animateLayout(); this.dock = d; localStorage.setItem('fb_term_dock', d); this.applyDock();
+    animateLayout(); this.dock = d; localStorage.setItem('codexbox_term_dock', d); this.applyDock();
   },
   // 终端最大化：铺满整个中区（文件区让位），再点还原
   toggleMax(force) {
@@ -2374,7 +2374,7 @@ const term = {
     $('#terminal-resizer').classList.remove('hidden');
     this.applyDock();
     $('#btn-terminal').classList.add('active');
-    localStorage.setItem('fb_term_open', '1'); // 右键/一键开终端也记住开合，和 open/close 对称
+    localStorage.setItem('codexbox_term_open', '1'); // 右键/一键开终端也记住开合，和 open/close 对称
     return this.newTab(dir);
   },
   // 拖拽文件/文件夹进来：把 shell 转义后的路径插入活动终端（作为 agent 上下文）
@@ -2428,7 +2428,7 @@ const term = {
       // 回车多半提交了条命令（cd 这类被回显过滤、不走 busy 周期），稍后把标题对齐真实目录
       if (d.indexOf('\r') !== -1) { clearTimeout(s._cwdT); s._cwdT = setTimeout(() => this.refreshCwd(s, true), 800); }
     }
-    window.fanboxPty.input(id, d);
+    window.codexboxPty.input(id, d);
   },
   // 点终端里的文件名/路径 → 结合 cwd + 回扫 scrollback + 搜索定位真实文件，在 CodexBox 里打开
   // tail：路径在该逻辑行里的后续文本，服务端用它做「空格扩展」stat 验证（带空格的文件名靠它补全）
@@ -2439,7 +2439,7 @@ const term = {
     let candidate = p;
     const isRel = !p.startsWith('/') && !p.startsWith('~');
     if (isRel) {
-      try { const r = await window.fanboxPty.cwd(id); if (r && r.ok && r.cwd) cwd = r.cwd; } catch { /* */ }
+      try { const r = await window.codexboxPty.cwd(id); if (r && r.ok && r.cwd) cwd = r.cwd; } catch { /* */ }
       candidate = (cwd || '').replace(/\/$/, '') + '/' + p.replace(/^\.\//, '');
     }
     const name = p.replace(/\/+$/, '').split('/').pop(); // 去掉目录结尾 / 再取 basename，否则名为空 basename 搜索失效
@@ -2496,7 +2496,7 @@ const term = {
   // 定位文件区到活动终端的真实目录
   async locateCwd() {
     if (!this.active) return;
-    const r = await window.fanboxPty.cwd(this.active);
+    const r = await window.codexboxPty.cwd(this.active);
     if (r && r.ok && r.cwd) navigate(r.cwd);
     else toast('取终端目录失败', true);
   },
@@ -2512,7 +2512,7 @@ const term = {
     if (!force && now - (s._cwdAt || 0) < 4000) return;
     s._cwdAt = now;
     try {
-      const r = await window.fanboxPty.cwd(s.id);
+      const r = await window.codexboxPty.cwd(s.id);
       if (r && r.ok && r.cwd && r.cwd !== s.cwd) {
         s.cwd = r.cwd; s.title = baseOf(r.cwd) || s.title;
         this.renderTabs(); renderBreadcrumb(); // 面包屑的项目配对色点也跟着换
@@ -2550,8 +2550,8 @@ const term = {
     }
     xterm.open(host);
     // WebGL 渲染加速（大输出/TUI 不掉帧），失败或上下文丢失回退 DOM
-    // 诊断开关：控制台跑 fbWebgl(false) 关掉 WebGL（用 DOM renderer）排查 CJK 残影乱码，fbWebgl(true) 恢复，需新开标签生效
-    const webglOff = (() => { try { return localStorage.getItem('fanbox.noWebgl') === '1'; } catch { return false; } })();
+    // 诊断开关：控制台跑 codexboxWebgl(false) 关掉 WebGL（用 DOM renderer）排查 CJK 残影乱码，codexboxWebgl(true) 恢复，需新开标签生效
+    const webglOff = (() => { try { return localStorage.getItem('codexbox.noWebgl') === '1'; } catch { return false; } })();
     let wg = null; // 存到 session 上，换肤/字号/resize 时清图集修 CJK 残影乱码（#37/#45）
     if (!webglOff && !window.__noWebgl && window.WebglAddon) {
       try {
@@ -2567,20 +2567,20 @@ const term = {
     this.sessions.push(sess);
     this.activate(id);
     updateWatches(); // 新终端的项目目录也纳入监听
-    const r = await window.fanboxPty.spawn({ id, cwd: startDir, cols: xterm.cols, rows: xterm.rows });
+    const r = await window.codexboxPty.spawn({ id, cwd: startDir, cols: xterm.cols, rows: xterm.rows });
     if (!r.ok) { sess.dead = true; xterm.write('\r\n  \x1b[31m终端启动失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || startDir; // 末尾 renderTabs 统一带上 cwd 重画
     xterm.onData((d) => {
       if (sess.dead) { if (d === '\r' || d === '\n') this.respawn(sess); return; } // 进程退出后回车真重开
       this.input(id, d);
     });
-    xterm.onResize(({ cols, rows }) => { sess.lastInput = Date.now(); window.fanboxPty.resize(id, cols, rows); }); // resize 引发的 TUI 重绘不算 agent 干活
-    window.fanboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
+    xterm.onResize(({ cols, rows }) => { sess.lastInput = Date.now(); window.codexboxPty.resize(id, cols, rows); }); // resize 引发的 TUI 重绘不算 agent 干活
+    window.codexboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
 
     // 自定义键盘处理：macOS 用 ⌘，其它平台用 Ctrl；纯 Ctrl 按键在 macOS 交给终端程序
     xterm.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true;
-      const primaryShortcut = window.fanboxEnv?.platform === 'darwin' ? e.metaKey : e.ctrlKey;
+      const primaryShortcut = window.codexboxEnv?.platform === 'darwin' ? e.metaKey : e.ctrlKey;
       if (primaryShortcut && (e.key === 'c' || e.key === 'C')) {
         if (xterm.hasSelection()) {
           // 有选中 → 复制到剪贴板，不发给 PTY
@@ -2764,7 +2764,7 @@ const term = {
   async respawn(sess) {
     sess.dead = false;
     sess.xterm.reset(); // 清掉死亡残留，新 shell 提示符不和旧画面叠在一起
-    const r = await window.fanboxPty.spawn({ id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows });
+    const r = await window.codexboxPty.spawn({ id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows });
     if (!r.ok) { sess.dead = true; sess.xterm.write('\x1b[31m重开失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || sess.startDir;
   },
@@ -2801,7 +2801,7 @@ const term = {
     const i = this.sessions.findIndex((x) => x.id === id);
     if (i < 0) return;
     const s = this.sessions[i];
-    try { window.fanboxPty.kill(id); } catch { /* */ }
+    try { window.codexboxPty.kill(id); } catch { /* */ }
     try { s.xterm.dispose(); } catch { /* */ }
     s.host.remove();
     this.sessions.splice(i, 1);
@@ -2865,7 +2865,7 @@ const term = {
   // 兼容渲染模式：关 WebGL 改用 DOM renderer（无字形图集，从机制上杜绝中文乱码；大输出略慢）。
   // 对所有已开标签立即生效；选择存 localStorage，新标签在创建处同样遵守
   setWebgl(on) {
-    try { if (on) localStorage.removeItem('fanbox.noWebgl'); else localStorage.setItem('fanbox.noWebgl', '1'); } catch { /* */ }
+    try { if (on) localStorage.removeItem('codexbox.noWebgl'); else localStorage.setItem('codexbox.noWebgl', '1'); } catch { /* */ }
     this.sessions.forEach((s) => {
       try {
         if (!on && s.webgl) { s.webgl.dispose(); s.webgl = null; }
@@ -2983,7 +2983,7 @@ const term = {
         const n = new Notification(title, { body });
         // 点通知：app 拉回前台 + 切到对应终端标签——多项目并行时直达要操作的那个环境
         n.onclick = () => {
-          try { if (window.fanboxWin) window.fanboxWin.focus(); else window.focus(); } catch { /* */ }
+          try { if (window.codexboxWin) window.codexboxWin.focus(); else window.focus(); } catch { /* */ }
           if (s && this.sessions.includes(s)) { this.open(); this.activate(s.id); }
           try { n.close(); } catch { /* */ }
         };
@@ -3095,11 +3095,11 @@ const crepe = {
     if (this._p) return this._p;
     if (window.__noCrepe) return Promise.resolve(null);
     this._p = new Promise((resolve) => {
-      if (window.FanboxCrepe) { resolve(window.FanboxCrepe); return; }
+      if (window.CodexBoxCrepe) { resolve(window.CodexBoxCrepe); return; }
       const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '/vendor/milkdown/milkdown.css';
       document.head.appendChild(link);
       const s = document.createElement('script'); s.src = '/vendor/milkdown/milkdown.js';
-      s.onload = () => resolve(window.FanboxCrepe || null);
+      s.onload = () => resolve(window.CodexBoxCrepe || null);
       s.onerror = () => { window.__noCrepe = 1; resolve(null); };
       document.head.appendChild(s);
     });
@@ -3525,9 +3525,9 @@ function igniteCard(top, count) {
 }
 
 // pty 数据回流（全局一次）
-if (window.fanboxPty) {
-  window.fanboxPty.onData(({ id, data }) => { const s = term.sessions.find((x) => x.id === id); if (s) { s.xterm.write(data); term.markBusy(s); } });
-  window.fanboxPty.onExit(({ id }) => {
+if (window.codexboxPty) {
+  window.codexboxPty.onData(({ id, data }) => { const s = term.sessions.find((x) => x.id === id); if (s) { s.xterm.write(data); term.markBusy(s); } });
+  window.codexboxPty.onExit(({ id }) => {
     const s = term.sessions.find((x) => x.id === id);
     if (s) {
       s.dead = true; s.status = 'dead';
@@ -3538,7 +3538,7 @@ if (window.fanboxPty) {
   });
 }
 // 文件变化 → 自动刷新列表（看着 agent 干活）；编辑中不动预览，避免吞掉未保存内容
-if (window.fanboxFs) {
+if (window.codexboxFs) {
   let rt = null;
   state.changed = new Map(); // 顶层名 → { count, files:Set, ts }
   let sweep = null;
@@ -3551,7 +3551,7 @@ if (window.fanboxFs) {
       if (dirty) renderFiles();
     }, 1000); // 单一清理定时器，避免大批量变更时堆积成千上万个 timer
   };
-  window.fanboxFs.onChanged(({ dir, filename }) => {
+  window.codexboxFs.onChanged(({ dir, filename }) => {
     // 系统/构建噪声（~/Library 缓存、node_modules 等 macOS 后台不停写）直接丢弃：
     // 既不点亮卡片、不触发文件跟随，也不刷新列表——否则 Library 会永远显示「被修改」
     if (filename && isNoisyChange(filename)) return;
@@ -3601,8 +3601,8 @@ if (window.fanboxFs) {
 // ---------- 启动 ----------
 async function init() {
   // 桌面 app：标记 body，给顶部交通灯留位、顶部可拖拽
-  if (window.fanboxEnv && window.fanboxEnv.isDesktopApp) document.documentElement.classList.add('desktop');
-  try { window.fanboxWin?.trafficLights(true); } catch { /* 重载后兜底恢复系统按钮，防上次全屏藏了没显回来 */ }
+  if (window.codexboxEnv && window.codexboxEnv.isDesktopApp) document.documentElement.classList.add('desktop');
+  try { window.codexboxWin?.trafficLights(true); } catch { /* 重载后兜底恢复系统按钮，防上次全屏藏了没显回来 */ }
   applyTheme(state.theme, false);
   if (state.sidebarCollapsed) { $('#app').classList.add('sidebar-collapsed'); $('#btn-sidebar')?.classList.add('on'); }
   applyLayout();
@@ -3637,18 +3637,18 @@ async function init() {
   setInterval(loadCodexProjects, 120000); // Codex 项目入口保持新鲜（服务端有 60s 缓存，开销很小）
   await navigate(state.home, false);
   // 恢复上次终端开合状态（dock 方位已由 applyDock 自带记忆）
-  if (localStorage.getItem('fb_term_open') === '1' && term.available()) term.open();
+  if (localStorage.getItem('codexbox_term_open') === '1' && term.available()) term.open();
   maybeShowGuide();
   bindUpdateNotice();
 }
 // 新版本提示：主进程查到 GitHub 有新 Release 时右下角弹胶囊，引导去下载页（不强更不打扰）
 function bindUpdateNotice() {
-  if (!window.fanboxUpdate) return;
+  if (!window.codexboxUpdate) return;
   const show = ({ version, url }) => {
-    if (localStorage.getItem('fb_skip_ver') === version || document.querySelector('.update-pill')) return;
+    if (localStorage.getItem('codexbox_skip_ver') === version || document.querySelector('.update-pill')) return;
     const bar = document.createElement('div');
     bar.className = 'update-pill';
-    const canDl = typeof window.fanboxUpdate.download === 'function'; // 老 preload 没这桥，降级只留发布页
+    const canDl = typeof window.codexboxUpdate.download === 'function'; // 老 preload 没这桥，降级只留发布页
     bar.innerHTML = `<span class="up-msg">新版本 v${escapeHtml(version)} 已发布</span>`
       + (canDl ? '<button class="up-go up-dl">下载更新</button><button class="up-page">发布页</button>' : '<button class="up-go">去下载</button>')
       + '<button class="up-x" title="这个版本不再提醒">✕</button>';
@@ -3658,26 +3658,26 @@ function bindUpdateNotice() {
     if (dl) {
       dl.onclick = async () => {
         dl.disabled = true; dl.textContent = '下载中…';
-        const r = await window.fanboxUpdate.download(version).catch(() => ({ ok: false }));
+        const r = await window.codexboxUpdate.download(version).catch(() => ({ ok: false }));
         if (r && r.ok) { bar.querySelector('.up-msg').textContent = '已下载并打开 dmg，拖进 Applications 完成更新'; dl.remove(); }
         else { dl.disabled = false; dl.textContent = '下载更新'; toast('下载失败，去发布页手动下吧', true); }
       };
-      if (window.fanboxUpdate.onProgress) window.fanboxUpdate.onProgress((m) => {
+      if (window.codexboxUpdate.onProgress) window.codexboxUpdate.onProgress((m) => {
         if (m.state === 'downloading' && dl.disabled) dl.textContent = m.pct >= 0 ? `下载中 ${m.pct}%` : '下载中…';
       });
-      bar.querySelector('.up-page').onclick = () => window.fanboxUpdate.open(url);
+      bar.querySelector('.up-page').onclick = () => window.codexboxUpdate.open(url);
     } else {
-      bar.querySelector('.up-go').onclick = () => { window.fanboxUpdate.open(url); bar.remove(); };
+      bar.querySelector('.up-go').onclick = () => { window.codexboxUpdate.open(url); bar.remove(); };
     }
-    bar.querySelector('.up-x').onclick = () => { localStorage.setItem('fb_skip_ver', version); bar.remove(); };
+    bar.querySelector('.up-x').onclick = () => { localStorage.setItem('codexbox_skip_ver', version); bar.remove(); };
   };
-  window.fanboxUpdate.onAvailable(show);
+  window.codexboxUpdate.onAvailable(show);
   // 主进程启动 6 秒就推送，init 加载大目录时这里可能还没注册监听——补拉一次，错过的推送不丢
-  if (window.fanboxUpdate.get) window.fanboxUpdate.get().then((m) => { if (m) show(m); }).catch(() => {});
+  if (window.codexboxUpdate.get) window.codexboxUpdate.get().then((m) => { if (m) show(m); }).catch(() => {});
 }
 
-// 终端渲染器诊断开关：fbWebgl(false) 关 WebGL 用 DOM renderer 排查 CJK 残影，fbWebgl(true) 恢复。
+// 终端渲染器诊断开关：codexboxWebgl(false) 关 WebGL 用 DOM renderer 排查 CJK 残影，codexboxWebgl(true) 恢复。
 // 与设置面板「WebGL 加速渲染」同一逻辑，对所有已开标签立即生效
-window.fbWebgl = (on) => { term.setWebgl(!!on); console.log('[fanbox] WebGL ' + (on ? '已开启' : '已关闭（DOM renderer 兼容渲染）') + '，已对所有终端标签生效'); return !!on; };
+window.codexboxWebgl = (on) => { term.setWebgl(!!on); console.log('[codexbox] WebGL ' + (on ? '已开启' : '已关闭（DOM renderer 兼容渲染）') + '，已对所有终端标签生效'); return !!on; };
 
 init();

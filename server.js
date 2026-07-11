@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * [INPUT]: 依赖 Node.js 内置模块、port-config.js 端口配置、public 静态资源和 ~/.fanbox 本地配置
- * [OUTPUT]: 对外提供文件 HTTP API、静态页面、隔离预览服务与 fanbox CLI 入口
+ * [INPUT]: 依赖 Node.js 内置模块、port-config.js 端口配置、public 静态资源和 ~/.codexbox 本地配置
+ * [OUTPUT]: 对外提供文件 HTTP API、静态页面、隔离预览服务与 codexbox CLI 入口
  * [POS]: 根模块的本地服务核心，被直接命令、npm start 和 Electron 主进程复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -19,7 +19,7 @@ const { resolvePort } = require('./port-config');
 
 const HOME = os.homedir();
 const PORT = resolvePort({ dev: process.argv.includes('--dev') });
-const CONFIG_DIR = path.join(HOME, '.fanbox');
+const CONFIG_DIR = path.join(HOME, '.codexbox');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const THUMB_DIR = path.join(CONFIG_DIR, 'thumbs');
 const PUBLIC = path.join(__dirname, 'public');
@@ -408,7 +408,7 @@ async function writeTextFile(p, content, expectedMtime) {
     }
   }
   // 原子写：临时文件 + fsync + rename，写到一半崩溃也不会损坏原文件
-  const tmp = `${file}.fanbox-tmp-${process.pid}-${Date.now()}`;
+  const tmp = `${file}.codexbox-tmp-${process.pid}-${Date.now()}`;
   try {
     const fh = await fsp.open(tmp, 'w');
     try { await fh.writeFile(content, 'utf8'); await fh.sync(); } finally { await fh.close(); }
@@ -610,7 +610,7 @@ async function releasePrepare(b) {
     }
   } catch { /* 没有 CHANGELOG 跳过 */ }
   // 3) 发布说明落临时文件给 gh 用；命令序列拼好交还前端注入终端
-  const notesFile = path.join(os.tmpdir(), `fanbox-release-notes-${Date.now()}.md`);
+  const notesFile = path.join(os.tmpdir(), `codexbox-release-notes-${Date.now()}.md`);
   await fsp.writeFile(notesFile, notes || `v${version}`, 'utf8');
   // 标题优先取第一个要点的内容，「### Added」这类小节头当不了标题
   const lines = notes.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -913,7 +913,7 @@ async function saveImage({ path: target, dataUrl, newName }) {
     dest = path.join(path.dirname(dest), newName);
     if (fs.existsSync(dest)) throw new Error('已存在同名文件');
   }
-  const tmp = `${dest}.fanbox-tmp-${process.pid}-${Date.now()}`;
+  const tmp = `${dest}.codexbox-tmp-${process.pid}-${Date.now()}`;
   try {
     const fh = await fsp.open(tmp, 'w');
     try { await fh.writeFile(buf); await fh.sync(); } finally { await fh.close(); }
@@ -1148,11 +1148,11 @@ async function serveHtmlPreview(req, res, filePath) {
   try {
     let html = await fsp.readFile(file, 'utf8');
     const viewportRe = /<meta[^>]*name=["']viewport["'][^>]*>/i;
-    const styleBlock = `<style data-fanbox-preview>
+    const styleBlock = `<style data-codexbox-preview>
   html, body { overflow: auto; }
   img, video { max-width: 100%; height: auto; }
 </style>`;
-    const measureScript = '<script data-fanbox-measure>(function(){var l=0;function r(){var w=Math.max(document.documentElement.scrollWidth,document.body?document.body.scrollWidth:0);if(w&&w!==l){l=w;try{parent.postMessage({fanboxPreviewWidth:w},"*")}catch(e){}}}addEventListener("load",function(){r();setTimeout(r,300)});addEventListener("resize",r)})()</script>';
+    const measureScript = '<script data-codexbox-measure>(function(){var l=0;function r(){var w=Math.max(document.documentElement.scrollWidth,document.body?document.body.scrollWidth:0);if(w&&w!==l){l=w;try{parent.postMessage({codexboxPreviewWidth:w},"*")}catch(e){}}}addEventListener("load",function(){r();setTimeout(r,300)});addEventListener("resize",r)})()</script>';
     // 本地图片引用兜底：不同 agent 写 html 引图方式各异，http 预览（沙箱 iframe）里有两类必裂——
     //   ① file:// 绝对 URL（http 页面禁加载 file://）；② /Users 这种裸绝对路径（解析到源站根）。
     // 策略分两层，确保「修问题不引入新问题」：
@@ -1160,7 +1160,7 @@ async function serveHtmlPreview(req, res, filePath) {
     //   · 失败兜底：其余绝对路径只在「已加载失败」时才重写到 /fs 再试一次（对本来能加载的引用零影响 → 结构性零回归）。
     //   · 相对路径走 /fs/<目录>/ 本就正常，失败多半是文件真没了，不强行兜底。
     // 未覆盖（注释在此说清，别让后人误以为全兜住）：<style> 块/外部 css 里的 file:// 背景图、srcset、加载后 JS 动态插入的元素。
-    const localImgScript = '<script data-fanbox-localimg>(function(){var FS="/fs";function f2fs(u){return (u&&u.slice(0,7)==="file://")?FS+u.slice(7):null;}function fix(el){if(!el.getAttribute)return;["src","href","poster"].forEach(function(a){var v=el.getAttribute(a),n=f2fs(v);if(n)el.setAttribute(a,n);});var st=el.getAttribute("style");if(st&&st.indexOf("file://")>-1)el.setAttribute("style",st.split("file://").join(FS));}function sweep(){document.querySelectorAll("[src],[href],[poster],[style]").forEach(fix);}sweep();document.addEventListener("DOMContentLoaded",sweep);document.addEventListener("error",function(e){var el=e.target;if(!el||!el.getAttribute||el.getAttribute("data-fs-tried"))return;var attr=el.tagName==="LINK"?"href":"src",v=el.getAttribute(attr);if(!v||v.charAt(0)!=="/"||v.slice(0,4)==="/fs/")return;if(/^(https?:|data:|blob:)/.test(v))return;el.setAttribute("data-fs-tried","1");el.setAttribute(attr,FS+v);},true);})()</script>';
+    const localImgScript = '<script data-codexbox-localimg>(function(){var FS="/fs";function f2fs(u){return (u&&u.slice(0,7)==="file://")?FS+u.slice(7):null;}function fix(el){if(!el.getAttribute)return;["src","href","poster"].forEach(function(a){var v=el.getAttribute(a),n=f2fs(v);if(n)el.setAttribute(a,n);});var st=el.getAttribute("style");if(st&&st.indexOf("file://")>-1)el.setAttribute("style",st.split("file://").join(FS));}function sweep(){document.querySelectorAll("[src],[href],[poster],[style]").forEach(fix);}sweep();document.addEventListener("DOMContentLoaded",sweep);document.addEventListener("error",function(e){var el=e.target;if(!el||!el.getAttribute||el.getAttribute("data-fs-tried"))return;var attr=el.tagName==="LINK"?"href":"src",v=el.getAttribute(attr);if(!v||v.charAt(0)!=="/"||v.slice(0,4)==="/fs/")return;if(/^(https?:|data:|blob:)/.test(v))return;el.setAttribute("data-fs-tried","1");el.setAttribute(attr,FS+v);},true);})()</script>';
     function injectHead(tag) {
       const headClose = html.match(/<\/head>/i);
       const headOpen = html.match(/<head[^>]*>/i);
@@ -1181,13 +1181,13 @@ async function serveHtmlPreview(req, res, filePath) {
     if (!viewportRe.test(html)) {
       injectHead('<meta name="viewport" content="width=device-width, initial-scale=1">');
     }
-    if (!html.includes('data-fanbox-preview')) {
+    if (!html.includes('data-codexbox-preview')) {
       injectHead(styleBlock);
     }
-    if (!html.includes('data-fanbox-measure')) {
+    if (!html.includes('data-codexbox-measure')) {
       injectHead(measureScript);
     }
-    if (!html.includes('data-fanbox-localimg')) {
+    if (!html.includes('data-codexbox-localimg')) {
       injectHead(localImgScript);
     }
     const buf = Buffer.from(html, 'utf8');
@@ -1444,7 +1444,7 @@ server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\n  ⚠️  端口 ${PORT} 已被占用——CodexBox 很可能已经在运行了。`);
     console.error(`      直接打开浏览器访问  http://localhost:${PORT}  就行；`);
-    console.error(`      想另开一个，换端口：FANBOX_PORT=8080 node server.js\n`);
+    console.error(`      想另开一个，换端口：CODEXBOX_PORT=8080 node server.js\n`);
   } else {
     console.error('\n  启动失败：', err.message, '\n');
   }
@@ -1488,7 +1488,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('  🏠  根目录:', HOME);
   console.log('\n  按 Ctrl+C 退出\n');
   pruneThumbs().catch(() => {}); // 启动时裁剪缩略图缓存，防止无限增长
-  if (!process.env.FANBOX_NO_OPEN) {
+  if (!process.env.CODEXBOX_NO_OPEN) {
     const opener = PLATFORM === 'darwin' ? 'open' : PLATFORM === 'win32' ? 'start' : 'xdg-open';
     exec(`${opener} ${link}`, () => {});
   }

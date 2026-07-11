@@ -1,12 +1,12 @@
 /**
  * [INPUT]: 依赖浏览器 window 全局对象，收录 index.html 与 app.js 使用的中文界面文案
- * [OUTPUT]: 对外提供 FANBOX_DICT 静态词典和 FANBOX_DICT_RULES 动态翻译规则
+ * [OUTPUT]: 对外提供 CODEXBOX_DICT 静态词典和 CODEXBOX_DICT_RULES 动态翻译规则
  * [POS]: public 模块的英文词典真源，由 i18n.js 在运行时消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 'use strict';
 // CodexBox 界面词典：中文原文 → 英文。由 i18n.js 消费；缺词条时英文界面回退显示中文。
-window.FANBOX_DICT = {
+window.CODEXBOX_DICT = {
   // ---------- 侧栏 ----------
   'Codex 的驾驶舱': 'The cockpit for Codex',
   '搜索全部文件': 'Search all files',
@@ -311,7 +311,7 @@ window.FANBOX_DICT = {
   '刚刚': 'just now',
 };
 // 含插值的动态文案：正则 → 替换式（$1 等捕获组），EN 模式下逐条尝试
-window.FANBOX_DICT_RULES = [
+window.CODEXBOX_DICT_RULES = [
   // 状态栏：N 项 · N 文件夹 · N 文件 大小
   [/^(\d+) 项( · (\d+) 文件夹)?( · (\d+) 文件 (.+))?$/, (m) => `${m[1]} items${m[3] ? ` · ${m[3]} folders` : ''}${m[5] ? ` · ${m[5]} files ${m[6]}` : ''}`],
   // 压缩包条目数：123 项 / 500+ 项
