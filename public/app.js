@@ -19,6 +19,7 @@ import { createFileActionsController } from './modules/file-actions.js';
 import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
+import { guardEditExit } from './modules/edit-session.js';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -114,18 +115,7 @@ let currentEditor = null;
 let imgEditState = null;
 let enterImageEdit;
 async function guardDirty() {
-  if (autosaveFlush) {
-    const f = autosaveFlush;
-    autosaveFlush = null; dirtyCheck = null; currentEditor = null;
-    await f();
-    return true;
-  }
-  if (dirtyCheck && dirtyCheck()) {
-    const ok = await confirmDialog('当前编辑有未保存的改动，放弃并离开？');
-    if (!ok) return false;
-  }
-  dirtyCheck = null;
-  return true;
+  return guardEditExit(runtime, (...args) => confirmDialog(...args));
 }
 const isMdName = (n) => /\.(md|markdown)$/i.test(String(n || ''));
 const isHtmlName = (n) => /\.(html?|xhtml)$/i.test(String(n || ''));
