@@ -7,6 +7,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installDom } from './dom-environment.mjs';
+import { loadRendererModule } from './dom-environment.mjs';
+
+const { createFileBrowserController } = await loadRendererModule('file-browser');
 
 test('文件列表渲染网格状态并转发选择、收藏和菜单动作', async () => {
   const dom = installDom('<div id="file-area"></div>');
@@ -65,5 +68,35 @@ test('文件列表支持列表视图和空目录状态', async () => {
     assert.equal(service.measureColumns(), 1);
     service.render({ entries: [], view: 'grid', gridSize: 'md', selected: '', cursor: -1, favorites: [], changed: null }, actions);
     assert.match(document.querySelector('.empty-state').textContent, /这个文件夹是空的/);
+  } finally { dom.cleanup(); }
+});
+
+test('点击目录后可在同一 Svelte 文件列表中完成导航重渲染', async () => {
+  const dom = installDom('<nav id="breadcrumb"></nav><div id="file-area"></div><div id="statusbar"></div>');
+  try {
+    const toasts = [];
+    const { createFileListService } = await import(new URL(`../../public/generated/ui.mjs?navigation=${Date.now()}`, import.meta.url));
+    const service = createFileListService({
+      target: document.querySelector('#file-area'), iconSvg: () => '', iconColorFor: () => '',
+      formatSize: () => '', formatTime: () => '', favoriteIcon: () => '', emptyIcon: '',
+    });
+    const state = {
+      cwd: '/root', history: [], entries: [{ name: 'child', path: '/root/child', isDir: true, kind: 'dir' }],
+      favorites: [], visible: [], breadcrumb: [], showHidden: false, sort: 'name', view: 'grid', gridSize: 'md', cursor: -1,
+    };
+    const noop = () => {};
+    const controller = createFileBrowserController(new Proxy({
+      $: (selector) => document.querySelector(selector), state, fileList: service,
+      follow: { on: false, navving: false }, term: { sessions: [] }, guardDirty: async () => true,
+      api: async () => ({ path: '/root/child', entries: [], project: null, breadcrumb: [{ name: '/', path: '/' }, { name: 'child', path: '/root/child' }], parent: '/root' }),
+      toast: (...args) => toasts.push(args), restoreFileAreaIfHidden: noop, renderRootsActive: noop,
+      ic: () => '<svg data-root></svg>',
+    }, { get(target, key) { return key in target ? target[key] : noop; } }));
+    controller.renderFiles();
+    document.querySelector('[data-path="/root/child"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(state.cwd, '/root/child');
+    assert.equal(document.querySelector('.empty-state')?.textContent, '这个文件夹是空的');
+    assert.equal(toasts.some(([message]) => message === '打开失败'), false);
   } finally { dom.cleanup(); }
 });
