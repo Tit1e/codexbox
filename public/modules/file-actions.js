@@ -5,7 +5,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createFileActionsController(deps) {
-  const { $, state, api, apiPost, toast, inputDialog, confirmDialog, popupMenu, closeContextMenu, diskPanel, loadFavorites, renderFavs, renderFiles, navigate, openPreview, setFileFollow, follow, term, mona, crepe, runtime, guardDirty, dirOf, fmtSize, escapeHtml, ic, svgWrap, SVG, showPreviewPanel, renderPreviewFoot, renderPreviewActions, isFav, renderBreadcrumb, renderTextPreview, isMdName, closePreview, lightbox, enterImageEdit, refreshGitStatus } = deps;
+  const { $, state, api, apiPost, toast, inputDialog, confirmDialog, popupMenu, closeContextMenu, diskPanel, releasePanel, loadFavorites, renderFavs, renderFiles, navigate, openPreview, setFileFollow, follow, term, mona, crepe, runtime, guardDirty, dirOf, fmtSize, escapeHtml, ic, svgWrap, SVG, showPreviewPanel, renderPreviewFoot, renderPreviewActions, isFav, renderBreadcrumb, renderTextPreview, isMdName, closePreview, lightbox, enterImageEdit, refreshGitStatus } = deps;
 // ---------- 操作 ----------
 // macOS 打开文件时 LaunchServices 会写 com.apple.lastuseddate#PS 扩展属性，FSEvents 据此连发事件——
 // 内容没动却会点亮「改」徽标。自己发起的打开记下路径，3 秒内该文件的变更事件按噪声丢弃
@@ -403,49 +403,6 @@ async function organizeLaunch(dirPath) {
 }
 
 // 发版向导：版本号 + 发布说明（预填 CHANGELOG 的 Unreleased 段）→ 命令序列在内嵌终端跑，每步可见可拦
-async function releasePanel() {
-  const dirPath = state.cwd;
-  const old = $('.rel-overlay'); if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.className = 'input-overlay rel-overlay';
-  ov.innerHTML = `<div class="input-dialog rel-dialog"><div class="input-title">发版</div><div class="rel-body"><div class="cmdk-loading">检查项目状态…</div></div></div>`;
-  document.body.appendChild(ov);
-  const onKey = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(); } };
-  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
-  ov.onclick = (ev) => { if (ev.target === ov) close(); };
-  document.addEventListener('keydown', onKey, true);
-  const d = await api('/api/release/inspect?path=' + encodeURIComponent(dirPath));
-  const body = ov.querySelector('.rel-body');
-  if (!d.ok) { body.innerHTML = `<div class="empty-state">${escapeHtml(d.error)}</div>`; return; }
-  const bump = d.version.replace(/(\d+)(\D*)$/, (m, n, t) => (Number(n) + 1) + t);
-  body.innerHTML = `
-    <div class="rel-row"><label>版本号</label><span class="rel-cur">当前 v${escapeHtml(d.version)} →</span><input id="rel-ver" value="${escapeHtml(bump)}" spellcheck="false"></div>
-    <div class="rel-row rel-col"><label>发布说明${d.unreleased ? '（预填自 CHANGELOG 的 Unreleased 段）' : ''}</label><textarea id="rel-notes" rows="8" spellcheck="false">${escapeHtml(d.unreleased)}</textarea></div>
-    <div class="rel-opts">
-      ${d.hasDist ? '<label><input type="checkbox" id="rel-dist" checked> 打包（npm run dist）</label>' : ''}
-      ${d.remote ? '<label><input type="checkbox" id="rel-push" checked> 推送（git push）</label>' : ''}
-      ${d.gh && d.remote ? '<label><input type="checkbox" id="rel-gh" checked> GitHub Release' + (d.hasDist ? '（附 dmg）' : '') + '</label>' : ''}
-    </div>
-    ${d.dirty ? '<div class="rel-hint">工作区有未提交改动，会一并进这次发版 commit</div>' : ''}
-    ${!d.isRepo ? '<div class="rel-hint">这里不是 git 仓库，只能改版本号</div>' : ''}
-    <div class="input-actions"><button class="ghost-btn" id="rel-cancel">取消</button><button class="primary" id="rel-go">在终端开跑</button></div>`;
-  $('#rel-cancel').onclick = close;
-  $('#rel-go').onclick = async () => {
-    const version = $('#rel-ver').value.trim();
-    if (!/^\d+\.\d+\.\d+/.test(version)) { toast('版本号要 x.y.z 格式', true); return; }
-    $('#rel-go').disabled = true;
-    const r = await apiPost('/api/release/prepare', {
-      path: dirPath, version,
-      notes: $('#rel-notes').value,
-      doDist: !!($('#rel-dist') && $('#rel-dist').checked),
-      doPush: !!($('#rel-push') && $('#rel-push').checked),
-      doRelease: !!($('#rel-gh') && $('#rel-gh').checked),
-    });
-    if (!r.ok) { toast(r.error || '准备失败', true); $('#rel-go').disabled = false; return; }
-    close();
-    term.runInDir(dirPath, r.cmd, `v${version} 发版序列已在终端开跑`);
-  };
-}
 
 // 右键上下文菜单：业务层只组装动作，渲染、定位和关闭生命周期交给 Svelte 服务。
 function showContextMenu(ev, e) {

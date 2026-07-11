@@ -11,6 +11,7 @@ editor-guard.test.mjs: 自动保存、未保存确认、预览关闭与编辑器
 file-follow.test.mjs: 文件跟随启停、终端绑定与手动导航接管测试
 git-panel.test.mjs: Svelte Git 状态栏汇总、非仓库提示、变更文件弹层与 Diff 跳转测试
 navigation.test.mjs: 文件浏览排序过滤与命令面板导航测试
+release-panel.test.mjs: Svelte 发布向导测试，覆盖状态检查、版本递增、选项提交与终端启动
 sidebar.test.mjs: Codex 项目列表归档、删除和运行态保护测试
 terminal-close.test.mjs: 终端快捷键测试，覆盖收起面板后新建、快捷启动 Codex、前台进程关闭确认、界面 busy 误判回归和桌面事件绑定
 

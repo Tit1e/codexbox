@@ -20,7 +20,7 @@ import { createUiController } from './modules/ui-controller.js';
 import { startApplication } from './modules/lifecycle.js';
 import { createEffects } from './modules/effects.js';
 import { guardEditExit } from './modules/edit-session.js';
-import { createContextMenuService, createDialogService, createDiskPanelService, createGitPanel } from './generated/ui.mjs';
+import { createContextMenuService, createDialogService, createDiskPanelService, createGitPanel, createReleasePanelService } from './generated/ui.mjs';
 
 const $ = (s) => document.querySelector(s);
 const api = (p) => fetch(p).then((r) => r.json());
@@ -146,6 +146,7 @@ const { isNoisyChange, kindFromName, rippleFileArea, playChime } = createEffects
 const dialogService = createDialogService();
 const contextMenuService = createContextMenuService();
 const diskPanelService = createDiskPanelService({ api, formatSize: fmtSize, parentOf: dirOf, separatorOf: () => state.sep, homeOf: () => state.home });
+const releasePanelService = createReleasePanelService({ api, apiPost, notify: toast, runCommand: (...args) => term?.runInDir(...args) });
 
 
 function setupControllers() {
@@ -167,6 +168,7 @@ function setupControllers() {
     popupMenu: contextMenuService.popupMenu,
     closeContextMenu: contextMenuService.closeContextMenu,
     diskPanel: diskPanelService.diskPanel,
+    releasePanel: () => releasePanelService.releasePanel(state.cwd),
     loadFavorites: (...args) => loadFavorites(...args),
     renderFavs: (...args) => renderFavs(...args),
     renderFiles: (...args) => renderFiles(...args),
