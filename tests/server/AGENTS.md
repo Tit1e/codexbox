@@ -3,6 +3,7 @@
 
 ## 成员清单
 config-store.test.js: 配置缺省、损坏拒绝、并发读改写与原子持久化测试
+http-security.test.js: 主 HTTP Host/Origin 防护、请求体上限与隔离预览路径边界测试
 path-service.test.js: 路径规整、文件类型和项目类型推断测试
 codex-sessions.test.js: Codex 新旧会话元数据、项目聚合和快照保护测试
 

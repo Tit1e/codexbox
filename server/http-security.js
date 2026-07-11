@@ -19,13 +19,13 @@ function originAllowed(req) {
   if (!origin) return true;
   try { return ALLOWED_HOSTS.has(new URL(origin).hostname); } catch { return false; }
 }
-function readBody(req) {
+function readBody(req, maxBytes = MAX_BODY) {
   return new Promise((resolve) => {
     let data = '', size = 0, aborted = false;
     req.on('data', (chunk) => {
       if (aborted) return;
       size += chunk.length;
-      if (size > MAX_BODY) { aborted = true; try { req.destroy(); } catch { /* */ } resolve({}); return; }
+      if (size > maxBytes) { aborted = true; try { req.destroy(); } catch { /* */ } resolve({}); return; }
       data += chunk;
     });
     req.on('end', () => { if (!aborted) { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } } });
