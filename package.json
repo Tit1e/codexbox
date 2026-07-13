@@ -12,6 +12,7 @@
     "postinstall": "node build/prepare-node-pty.js",
     "start": "node server.js --dev",
     "app": "electron .",
+    "dev": "node build/dev.mjs",
     "rebuild": "electron-rebuild -f -w node-pty",
     "rebuild:pty": "cd node_modules/node-pty && node-gyp rebuild --target=$(node -p \"require('electron/package.json').version\") --dist-url=https://www.electronjs.org/headers --arch=$PTY_ARCH",
     "build:milkdown": "esbuild src-vendor/milkdown-entry.js --bundle --format=iife --minify --outfile=public/vendor/milkdown/milkdown.js --loader:.svg=dataurl --loader:.woff=file --loader:.woff2=file --loader:.ttf=file --loader:.eot=file --asset-names=[name]",

@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 Electron 窗口/菜单/IPC 能力、PTY/Shell 集成/恢复/退出等领域服务、../server.js 与端口配置
- * [OUTPUT]: 对外提供 CodexBox 桌面主进程、PTY/恢复与文件/剪贴板/更新 IPC、菜单和窗口生命周期
- * [POS]: electron 模块的主进程编排器，与 preload.js 协作连接渲染层、本地服务和操作系统
+ * [INPUT]: 依赖 Electron 窗口/菜单/IPC 能力、PTY/Shell 集成/恢复/退出/开发刷新等领域服务、../server.js 与端口配置
+ * [OUTPUT]: 对外提供 CodexBox 桌面主进程、PTY/恢复与文件/剪贴板/更新 IPC、开发热重载、菜单和窗口生命周期
+ * [POS]: electron 模块的主进程编排器，与 preload.js 和开发监督脚本协作连接渲染层、本地服务和操作系统
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 'use strict';
@@ -20,6 +20,7 @@ const { createLidGuard } = require('./power-service');
 const { createQuitGuard } = require('./quit-service');
 const { createZshIntegration } = require('./shell-integration');
 const { createTerminalRecoveryStore } = require('./terminal-recovery-store');
+const { createDevReloadService } = require('./dev-reload-service');
 
 const APP_NAME = 'CodexBox';
 app.setName(APP_NAME);
@@ -311,6 +312,12 @@ function uiLang() {
   return String(app.getLocale() || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
 const M = (zh, en) => (uiLang() === 'zh' ? zh : en);
+const devReloadService = createDevReloadService({ app, dialog, ptyService, getWindow: () => win, translate: M });
+if (process.env.CODEXBOX_DEV_WATCH === '1') {
+  process.on('message', (message) => {
+    if (message && message.type === 'codexbox-dev') devReloadService.request(message.action);
+  });
+}
 
 // ---------- 合盖继续运行（禁用合盖休眠）----------
 // macOS 的「合盖休眠」是独立机制，caffeinate / powerSaveBlocker 这类 power assertion 都挡不住，

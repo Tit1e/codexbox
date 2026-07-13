@@ -1,13 +1,14 @@
 /**
  * [INPUT]: 依赖 esbuild、esbuild-svelte 与 src-ui/ 下的 Svelte 渲染层源码
- * [OUTPUT]: 生成 public/generated/ui.mjs Svelte 离线浏览器模块
- * [POS]: build 模块的 Svelte 界面构建入口，被 npm run build:svelte 与完整检查调用
+ * [OUTPUT]: 对外提供共享构建配置与 buildSvelteUi，并生成 public/generated/ui.mjs Svelte 离线浏览器模块
+ * [POS]: build 模块的 Svelte 界面构建真源，被正式构建、开发监听与完整检查复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import esbuild from 'esbuild';
 import sveltePlugin from 'esbuild-svelte';
+import { fileURLToPath } from 'node:url';
 
-await esbuild.build({
+export const svelteBuildOptions = {
   entryPoints: ['src-ui/index.js'],
   outfile: 'public/generated/ui.mjs',
   bundle: true,
@@ -25,4 +26,10 @@ await esbuild.build({
  * [POS]: public/generated 的 Svelte 界面构建产物，由 public/app.js 直接消费
  * [PROTOCOL]: 由 build/svelte-ui.mjs 生成，修改 src-ui 后重新构建并检查 AGENTS.md
  */` },
-});
+};
+
+export function buildSvelteUi() {
+  return esbuild.build(svelteBuildOptions);
+}
+
+if (fileURLToPath(import.meta.url) === process.argv[1]) await buildSvelteUi();

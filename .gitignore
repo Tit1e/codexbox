@@ -11,6 +11,7 @@ build/*
 !build/AGENTS.md
 !build/node-pty-permissions.js
 !build/prepare-node-pty.js
+!build/dev.mjs
 
 # 系统与编辑器
 .DS_Store

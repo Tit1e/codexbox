@@ -184,12 +184,15 @@ Open `http://localhost:4567`. Zero dependencies, zero build — clone and run. T
 
 ```bash
 npm install
+npm run dev          # 完整桌面开发：Svelte 自动构建，渲染层刷新，主进程自动重启
 npm start            # 网页开发版，默认 4577 / web development server, defaults to 4577
 npm run app          # electron . 启动完整桌面版 / full desktop app
 npm run dist         # 打包签名 .dmg（产物在 dist/，不入 git）/ build & sign the .dmg (output in dist/)
 ```
 
 开发入口 `npm start` 和 `npm run app` 默认跑 `http://localhost:4577`（预览服务 `4578`），正式打包版默认跑 `http://localhost:4567`（预览服务 `4568`），避免本机同时开正式版和开发版时端口冲突。开发环境需要手动指定时使用 `CODEXBOX_DEV_PORT=xxxx npm start` 或 `CODEXBOX_DEV_PORT=xxxx npm run app`；正式环境继续使用 `CODEXBOX_PORT`。
+
+`npm run dev` 监听 `src-ui/` 和 `public/`，保存后自动构建并刷新界面；监听 `server/`、`electron/`、`server.js` 和 `port-config.js`，保存后自动重启 Electron。若已有内嵌终端，刷新或重启前会先确认，避免静默终止任务。
 
 > 打包遇到 Electron 下载被墙：`ELECTRON_MIRROR="https://registry.npmmirror.com/-/binary/electron/" npm run dist`
 
