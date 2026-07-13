@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node --test tests/server/*.test.js tests/frontend/*.test.mjs tests/electron/*.test.js",
     "check": "npm run build:svelte && node --check server.js && find server electron build -name '*.js' -exec node --check {} \\; && node --input-type=module --check < public/app.js && find public/modules -name '*.js' -exec sh -c 'node --input-type=module --check < \"$1\"' _ {} \\; && node --check public/i18n-dict.js && npm test",
-    "postinstall": "node build/prepare-node-pty.js",
+    "postinstall": "node build/prepare-electron.mjs && node build/prepare-node-pty.js",
     "start": "node server.js --dev",
     "app": "electron .",
     "dev": "node build/dev.mjs",
@@ -58,6 +58,11 @@
   "type": "commonjs",
   "engines": {
     "node": ">=22"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.28.0": true,
+    "node-pty@1.1.0": true
   },
   "dependencies": {
     "@xterm/addon-clipboard": "^0.2.0",

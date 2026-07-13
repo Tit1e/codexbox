@@ -194,6 +194,8 @@ npm run dist         # 打包签名 .dmg（产物在 dist/，不入 git）/ buil
 
 `npm run dev` 监听 `src-ui/` 和 `public/`，保存后自动构建并刷新界面；监听 `server/`、`electron/`、`server.js` 和 `port-config.js`，保存后自动重启 Electron。若已有内嵌终端，刷新或重启前会先确认，避免静默终止任务。
 
+项目已在 `package.json` 中批准 Electron、esbuild 和 node-pty 的精确版本安装脚本；若 Node 26 附带的 npm 11.17 仍留下 Electron 33 半安装状态，根项目 `postinstall` 会在依赖树稳定后使用官方校验包和 macOS `ditto` 自动补全，无需使用放开全部脚本的危险参数。
+
 > 打包遇到 Electron 下载被墙：`ELECTRON_MIRROR="https://registry.npmmirror.com/-/binary/electron/" npm run dist`
 
 ## Shortcuts · 快捷键

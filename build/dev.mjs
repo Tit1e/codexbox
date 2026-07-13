@@ -116,11 +116,7 @@ async function shutdown(code = 0) {
   process.exitCode = code;
 }
 
-const svelteContext = await esbuild.context({
-  ...svelteBuildOptions,
-  sourcemap: 'inline',
-  minify: false,
-});
+const svelteContext = await esbuild.context(svelteBuildOptions);
 
 await svelteContext.rebuild();
 startElectron();

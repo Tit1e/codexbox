@@ -17,7 +17,7 @@ tests/ - Node 内置自动化测试，覆盖服务端高风险逻辑与渲染层
 
 <config>
 .gitattributes - 生成 Svelte 模块的差异检查规则，保留运行时有意的空白字符字面量
-package.json - CodexBox 桌面入口、依赖版本、测试检查和构建发布脚本
+package.json - CodexBox 桌面入口、依赖版本、二进制依赖安装许可、测试检查和构建发布脚本
 package-lock.json - npm 依赖锁文件
 port-config.js - 正式/开发端口常量、合法范围及 CODEXBOX_PORT/CODEXBOX_DEV_PORT 环境隔离的唯一真源
 server.js - 本地 HTTP 文件服务、带快照确认与运行态保护的 Codex 项目会话归档/删除、codexbox CLI 入口，按 --dev 选择端口模式
