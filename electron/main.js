@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron 窗口/菜单/IPC 能力、PTY/Shell 集成/恢复/退出/开发刷新等领域服务、../server.js 与端口配置
- * [OUTPUT]: 对外提供 CodexBox 桌面主进程、PTY/恢复与文件/剪贴板/更新 IPC、Codex 新会话快捷键、开发热重载、菜单和窗口生命周期
+ * [OUTPUT]: 对外提供 CodexBox 桌面主进程、PTY/恢复与文件/剪贴板/更新 IPC、Codex 新会话与命令重启快捷键、开发热重载、菜单和窗口生命周期
  * [POS]: electron 模块的主进程编排器，与 preload.js 和开发监督脚本协作连接渲染层、本地服务和操作系统
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -423,6 +423,11 @@ function buildMenu() {
         click: () => send('terminal:launch-codex-new'),
       },
       {
+        label: M('重新运行当前命令', 'Rerun Active Command'),
+        accelerator: 'CmdOrCtrl+Shift+R',
+        click: () => send('terminal:restart-active'),
+      },
+      {
         label: M('关闭当前终端', 'Close Active Terminal'),
         accelerator: 'CmdOrCtrl+W',
         click: () => send('terminal:close-active'),
@@ -473,6 +478,7 @@ ipcMain.on('pty:resize', (event, payload) => ptyService.resize(payload));
 ipcMain.on('pty:kill', (event, payload) => ptyService.kill(payload));
 ipcMain.handle('pty:cwd', (event, payload) => ptyService.cwd(payload));
 ipcMain.handle('pty:has-foreground-process', (event, payload) => ptyService.hasForegroundProcess(payload));
+ipcMain.handle('pty:restart-command', (event, payload) => ptyService.restartCommand(payload));
 ipcMain.handle('terminal-recovery:list', () => recoveryStore.list());
 ipcMain.handle('terminal-recovery:take', (event, payload) => recoveryStore.take(payload && payload.ids));
 ipcMain.handle('terminal-recovery:clear', () => { recoveryStore.clear(); return { ok: true }; });

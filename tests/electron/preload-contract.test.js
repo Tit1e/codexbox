@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js 文件读取与 electron/main.js、preload.js IPC 字符串
- * [OUTPUT]: 验证 preload 使用的 invoke/send 频道均在主进程注册，并校验桌面 Codex 新会话快捷键事件链
+ * [OUTPUT]: 验证 preload 使用的 invoke/send 频道均在主进程注册，并校验桌面 Codex 新会话与命令重启快捷键链路
  * [POS]: tests/electron 的跨文件 IPC 与菜单快捷键契约测试，防止桥接改名漂移
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -36,4 +36,15 @@ test('Cmd/Ctrl+Shift+N 菜单事件贯通 Codex 新会话桥接', async () => {
   assert.match(main, /accelerator:\s*'CmdOrCtrl\+Shift\+N'/);
   assert.match(main, /send\('terminal:launch-codex-new'\)/);
   assert.match(preload, /onLaunchNewCodex:[\s\S]*ipcRenderer\.on\('terminal:launch-codex-new'/);
+});
+
+test('Cmd/Ctrl+Shift+R 菜单事件贯通当前命令重启桥接', async () => {
+  const root = path.resolve(__dirname, '..', '..');
+  const main = await fsp.readFile(path.join(root, 'electron', 'main.js'), 'utf8');
+  const preload = await fsp.readFile(path.join(root, 'electron', 'preload.js'), 'utf8');
+  assert.match(main, /accelerator:\s*'CmdOrCtrl\+Shift\+R'/);
+  assert.match(main, /send\('terminal:restart-active'\)/);
+  assert.match(main, /ipcMain\.handle\('pty:restart-command'/);
+  assert.match(preload, /restartCommand:[\s\S]*ipcRenderer\.invoke\('pty:restart-command'/);
+  assert.match(preload, /onRestartActiveCommand:[\s\S]*ipcRenderer\.on\('terminal:restart-active'/);
 });

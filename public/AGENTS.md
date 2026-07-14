@@ -2,8 +2,8 @@
 > L2 | 父级: ../AGENTS.md
 
 ## 成员清单
-app.js: 原生 ES Module 渲染层主入口，编排文件管理、Git 查看、预览编辑、内嵌 xterm、选择性命令恢复、Codex 项目会话与全局交互
-i18n-dict.js: 中文源文案到英文的静态词典与动态规则集合，导出 CODEXBOX_DICT 和 CODEXBOX_DICT_RULES
+app.js: 原生 ES Module 渲染层主入口，编排文件管理、Git 查看、预览编辑、内嵌 xterm、选择性命令恢复、终端快捷动作、Codex 项目会话与全局交互
+i18n-dict.js: 中文源文案到英文的静态词典与动态规则集合，覆盖终端命令重启反馈并导出 CODEXBOX_DICT 和 CODEXBOX_DICT_RULES
 i18n.js: MutationObserver 国际化运行层，处理界面翻译和语言切换
 index.html: 单页应用文件区、预览区与终端区 DOM 骨架及本地 vendor 脚本加载顺序
 styles/: 按级联顺序拆分的主题、布局、预览、弹层、终端与文件跟随样式

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js fs/path/os，在 Electron userData 下生成隔离的 zsh 启动文件
- * [OUTPUT]: 对外提供 createZshIntegration 与 consumeShellMarkers，注入并解析顶层命令生命周期标记
+ * [OUTPUT]: 对外提供 createZshIntegration 与 consumeShellMarkers，安全继承嵌套 zsh 配置并认证顶层命令生命周期标记
  * [POS]: electron 模块的 Shell 集成边界，被 pty-service.js 用于准确追踪仍在运行的原始命令
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -13,10 +13,21 @@ const path = require('path');
 const PREFIX = '\x1b]777;codexbox;';
 const SUFFIX = '\x07';
 
+function isIntegrationDir(candidate, currentDir) {
+  if (!candidate) return false;
+  if (path.resolve(candidate) === path.resolve(currentDir)) return true;
+  if (!path.normalize(candidate).endsWith(path.join('shell-integration', 'zsh'))) return false;
+  try {
+    const rc = fs.readFileSync(path.join(candidate, '.zshrc'), 'utf8');
+    return rc.includes('_codexbox_preexec()') && rc.includes('codexbox;start;');
+  } catch { return false; }
+}
+
 function createZshIntegration(userData, env = process.env) {
   const dir = path.join(userData, 'shell-integration', 'zsh');
-  const originalZdotdir = env.ZDOTDIR || os.homedir();
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const originalZdotdir = [env.CODEXBOX_ORIGINAL_ZDOTDIR, env.ZDOTDIR, os.homedir()]
+    .find((candidate) => candidate && !isIntegrationDir(candidate, dir)) || os.homedir();
   const source = (name) => `[[ -r \"$CODEXBOX_ORIGINAL_ZDOTDIR/${name}\" ]] && source \"$CODEXBOX_ORIGINAL_ZDOTDIR/${name}\"\n`;
   fs.writeFileSync(path.join(dir, '.zshenv'), source('.zshenv') + `export ZDOTDIR=${JSON.stringify(dir)}\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(dir, '.zprofile'), source('.zprofile'), { mode: 0o600 });
@@ -24,12 +35,16 @@ function createZshIntegration(userData, env = process.env) {
   fs.writeFileSync(path.join(dir, '.zlogout'), source('.zlogout'), { mode: 0o600 });
   fs.writeFileSync(path.join(dir, '.zshrc'), source('.zshrc') + [
     'autoload -Uz add-zsh-hook',
+    'typeset -g _codexbox_shell_token="$CODEXBOX_SHELL_TOKEN"',
+    'typeset +x _codexbox_shell_token',
+    'unset CODEXBOX_SHELL_TOKEN',
+    'typeset -gr _codexbox_shell_token',
     '_codexbox_preexec() {',
     '  local encoded',
     '  encoded=$(printf %s "$1" | /usr/bin/base64 | /usr/bin/tr -d "\\n")',
-    `  printf '${PREFIX}start;%s${SUFFIX}' "$encoded"`,
+    `  printf '${PREFIX}start;%s;%s${SUFFIX}' "$_codexbox_shell_token" "$encoded"`,
     '}',
-    `_codexbox_precmd() { printf '${PREFIX}end${SUFFIX}' }`,
+    `_codexbox_precmd() { printf '${PREFIX}end;%s${SUFFIX}' "$_codexbox_shell_token" }`,
     'add-zsh-hook preexec _codexbox_preexec',
     'add-zsh-hook precmd _codexbox_precmd',
     '',
@@ -37,7 +52,7 @@ function createZshIntegration(userData, env = process.env) {
   return { dir, originalZdotdir };
 }
 
-function consumeShellMarkers(state, chunk, onMarker) {
+function consumeShellMarkers(state, chunk, expectedToken, onMarker) {
   const input = (state.carry || '') + String(chunk || '');
   let visible = '';
   let cursor = 0;
@@ -48,10 +63,10 @@ function consumeShellMarkers(state, chunk, onMarker) {
     const end = input.indexOf(SUFFIX, start + PREFIX.length);
     if (end < 0) { state.carry = input.slice(start); return visible; }
     const payload = input.slice(start + PREFIX.length, end);
-    if (payload === 'end') onMarker({ type: 'end' });
-    else if (payload.startsWith('start;')) {
+    if (expectedToken && payload === `end;${expectedToken}`) onMarker({ type: 'end' });
+    else if (expectedToken && payload.startsWith(`start;${expectedToken};`)) {
       try {
-        const command = Buffer.from(payload.slice(6), 'base64').toString('utf8');
+        const command = Buffer.from(payload.slice(7 + expectedToken.length), 'base64').toString('utf8');
         if (command.length <= 16384) onMarker({ type: 'start', command });
       } catch { /* 非法标记只丢弃，不污染终端输出 */ }
     }

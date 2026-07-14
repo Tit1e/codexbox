@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 happy-dom 测试环境与 public/modules 控制器工厂
- * [OUTPUT]: 验证渲染层控制器公开方法契约完整且工厂可独立装配
+ * [INPUT]: 依赖 happy-dom 测试环境与 public/modules 控制器及终端快捷动作工厂
+ * [OUTPUT]: 验证渲染层控制器公开方法契约完整、终端重启动作存在且工厂可独立装配
  * [POS]: tests/frontend 的架构回归测试，防止拆分后导出遗漏或工厂初始化失败
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -19,6 +19,7 @@ const { createImageEditor } = await loadRendererModule('image-editor');
 const { createPreviewController } = await loadRendererModule('preview');
 const { createSidebarController } = await loadRendererModule('sidebar');
 const { createTerminalController } = await loadRendererModule('terminal');
+const { createTerminalShortcutActions } = await loadRendererModule('terminal-shortcuts');
 const { createUiController } = await loadRendererModule('ui-controller');
 
 const noop = () => {};
@@ -41,7 +42,7 @@ function dependencyBag(overrides = {}) {
 test('所有渲染层控制器工厂可独立装配并保持公开接口', async () => {
   const dom = installDom();
   try {
-    const deps = dependencyBag();
+    const deps = dependencyBag({ createTerminalShortcutActions });
     const { createGitPanel } = await import(new URL(`../../public/generated/ui.mjs?contract=${Date.now()}`, import.meta.url));
     const icons = createIcons(deps.state);
     assert.equal(typeof icons.iconSvg, 'function');
@@ -59,6 +60,7 @@ test('所有渲染层控制器工厂可独立装配并保持公开接口', async
     assert.equal(typeof terminal.openInDir, 'function');
     assert.equal(typeof terminal.newTerminal, 'function');
     assert.equal(typeof terminal.closeActive, 'function');
+    assert.equal(typeof terminal.restartActive, 'function');
     assert.equal(typeof terminal.bindDesktopEvents, 'function');
     assert.equal(typeof createUiController(deps).bindEvents, 'function');
   } finally {

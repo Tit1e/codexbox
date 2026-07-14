@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 node-pty、Node.js 文件/进程能力、shell-integration.js 与 ipc-validation.js 安全契约
- * [OUTPUT]: 对外提供 createPtyService，统一管理终端、顶层命令追踪、运行任务快照和销毁
+ * [INPUT]: 依赖 node-pty、Node.js 文件/进程/随机数能力、shell-integration.js 与 ipc-validation.js 安全契约
+ * [OUTPUT]: 对外提供 createPtyService，统一管理终端、认证命令追踪、安全重启、运行任务快照和销毁
  * [POS]: electron 模块的终端领域服务，由 main.js 装配并被 IPC 处理器调用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -9,6 +9,7 @@
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { randomBytes } = require('crypto');
 const { exec, execFile } = require('child_process');
 const { validPtyId, normalizeTerminalSize, validPtyInput, validDirectory } = require('./ipc-validation');
 const { consumeShellMarkers } = require('./shell-integration');
@@ -51,9 +52,17 @@ function foregroundProcessByPid(pid, run = execFile) {
   });
 }
 
-function createPtyService({ pty, send = () => {}, onCountChange = () => {}, foregroundProcess = foregroundProcessByPid, cwdLookup = termCwdByPid, zshIntegration = null }) {
+function createPtyService({ pty, send = () => {}, onCountChange = () => {}, foregroundProcess = foregroundProcessByPid, cwdLookup = termCwdByPid, zshIntegration = null, restartTimeoutMs = 8000, createShellToken = () => randomBytes(24).toString('hex') }) {
   const terminals = new Map();
   const notifyCount = () => onCountChange(terminals.size);
+
+  function finishRestart(record, result) {
+    const pending = record && record.restart;
+    if (!pending) return;
+    record.restart = null;
+    clearTimeout(pending.timer);
+    pending.resolve(result);
+  }
 
   function spawn({ id, cwd, cols, rows }) {
     if (!pty) return { ok: false, error: 'node-pty 未编译，跑：npm run rebuild' };
@@ -63,9 +72,12 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
     const startCwd = validDirectory(cwd, fs) ? path.resolve(cwd) : os.homedir();
     const size = normalizeTerminalSize(cols, rows);
     const env = { ...process.env, TERM: 'xterm-256color', CODEXBOX: '1' };
+    const markerToken = createShellToken();
+    delete env.CODEXBOX_SHELL_TOKEN;
     if (zshIntegration && path.basename(shellPath) === 'zsh') {
       env.ZDOTDIR = zshIntegration.dir;
       env.CODEXBOX_ORIGINAL_ZDOTDIR = zshIntegration.originalZdotdir;
+      env.CODEXBOX_SHELL_TOKEN = markerToken;
     }
     delete env.CODEXBOX_PORT;
     delete env.CODEXBOX_DEV_PORT;
@@ -77,16 +89,28 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
         name: 'xterm-256color', cols: size.cols, rows: size.rows, cwd: startCwd, env,
       });
     } catch (err) { return { ok: false, error: err.message }; }
-    const record = { terminal, startCwd, command: '', markerState: { carry: '' } };
+    const record = { terminal, startCwd, command: '', markerToken, markerState: { carry: '' }, restart: null };
     terminals.set(id, record);
     notifyCount();
     terminal.onData((data) => {
-      const visible = consumeShellMarkers(record.markerState, data, (marker) => {
+      const visible = consumeShellMarkers(record.markerState, data, record.markerToken, (marker) => {
         record.command = marker.type === 'start' && !/^\s/.test(marker.command) ? marker.command : '';
+        const pending = record.restart;
+        if (!pending) return;
+        if (marker.type === 'end' && pending.phase === 'interrupting') {
+          pending.phase = 'starting';
+          try { record.terminal.write(pending.command + '\r'); }
+          catch { finishRestart(record, { ok: false, error: '重新执行命令失败' }); }
+        } else if (marker.type === 'start' && pending.phase === 'starting') {
+          finishRestart(record, marker.command === pending.command
+            ? { ok: true }
+            : { ok: false, error: '终端命令状态已变化，已取消重新运行' });
+        }
       });
       if (visible) send('pty:data', { id, data: visible });
     });
     terminal.onExit(({ exitCode }) => {
+      finishRestart(record, { ok: false, error: '终端已退出，无法重新运行命令' });
       terminals.delete(id);
       notifyCount();
       send('pty:exit', { id, exitCode });
@@ -97,7 +121,9 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
   function input({ id, data }) {
     if (!validPtyId(id) || !validPtyInput(data)) return;
     const record = terminals.get(id);
-    if (record) record.terminal.write(data);
+    if (!record) return;
+    if (record.restart) finishRestart(record, { ok: false, error: '检测到新的终端输入，已取消重新运行' });
+    record.terminal.write(data);
   }
 
   function resize({ id, cols, rows }) {
@@ -112,6 +138,7 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
     if (!validPtyId(id)) return;
     const record = terminals.get(id);
     if (!record) return;
+    finishRestart(record, { ok: false, error: '终端已关闭，无法重新运行命令' });
     try { record.terminal.kill(); } catch { /* 终端可能刚退出 */ }
     terminals.delete(id);
     notifyCount();
@@ -130,6 +157,34 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
     const record = terminals.get(id);
     if (!record || !record.terminal.pid) return { ok: false, running: false };
     return foregroundProcess(record.terminal.pid);
+  }
+
+  async function restartCommand({ id }) {
+    if (!validPtyId(id)) return { ok: false, error: '终端 ID 非法' };
+    const record = terminals.get(id);
+    if (!record || !record.terminal.pid) return { ok: false, error: '当前终端不可用' };
+    if (record.restart) return { ok: false, error: '当前命令正在重新运行' };
+    const command = record.command;
+    if (!command) return { ok: false, error: '当前终端没有可重新运行的命令' };
+    let foreground;
+    try { foreground = await foregroundProcess(record.terminal.pid); }
+    catch { foreground = { ok: false, running: false }; }
+    if (terminals.get(id) !== record || record.command !== command) {
+      return { ok: false, error: '终端命令状态已变化，请重试' };
+    }
+    if (record.restart) return { ok: false, error: '当前命令正在重新运行' };
+    if (!foreground.ok) return { ok: false, error: '无法确认当前命令是否仍在运行' };
+    if (!foreground.running) return { ok: false, error: '当前终端没有正在运行的命令' };
+    return new Promise((resolve) => {
+      const pending = { command, phase: 'interrupting', timer: null, resolve };
+      record.restart = pending;
+      pending.timer = setTimeout(() => {
+        const seconds = Math.max(1, Math.ceil(restartTimeoutMs / 1000));
+        finishRestart(record, { ok: false, error: `命令未在 ${seconds} 秒内停止，已取消重新运行` });
+      }, restartTimeoutMs);
+      try { record.terminal.write('\x03'); }
+      catch { finishRestart(record, { ok: false, error: '无法中断当前命令' }); }
+    });
   }
 
   async function countRunningTasks() {
@@ -158,12 +213,15 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
   }
 
   function killAll() {
-    terminals.forEach(({ terminal }) => { try { terminal.kill(); } catch { /* */ } });
+    terminals.forEach((record) => {
+      finishRestart(record, { ok: false, error: '终端已关闭，无法重新运行命令' });
+      try { record.terminal.kill(); } catch { /* */ }
+    });
     terminals.clear();
     notifyCount();
   }
 
-  return { spawn, input, resize, kill, cwd, hasForegroundProcess, countRunningTasks, runningTaskSnapshots, killAll, count: () => terminals.size };
+  return { spawn, input, resize, kill, cwd, hasForegroundProcess, restartCommand, countRunningTasks, runningTaskSnapshots, killAll, count: () => terminals.size };
 }
 
 module.exports = { createPtyService, decodeLsofPath, termCwdByPid, foregroundProcessByPid };

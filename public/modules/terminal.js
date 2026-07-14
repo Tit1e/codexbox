@@ -1,11 +1,11 @@
 /**
- * [INPUT]: 依赖 Electron PTY/恢复桥、xterm 浏览器资源、共享 state/follow 与文件导航回调
- * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、命令恢复、Codex 继续/新建启动、状态、拖放和布局
+ * [INPUT]: 依赖 Electron PTY/恢复桥、xterm 浏览器资源、terminal-shortcuts.js 工厂、共享 state/follow 与文件导航回调
+ * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、命令恢复、Codex 启动、命令重启、状态、拖放和布局
  * [POS]: public/modules 的终端领域控制器，被应用事件层和文件跟随模块消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createTerminalController(deps) {
-  const { $, state, follow, openWith, applyPreviewSize, animateLayout, updateWatches, escapeHtml, ic, baseOf, dirOf, navigate, renderBreadcrumb, playChime, toast, TERM_LINK_RE_BARE, api, apiPost, shQuote, applySelection, openPreview, recordRecent, codexResumeLast, setPreviewMax, isMdName, isHtmlName, popupMenu, rippleFileArea, confirmDialog } = deps;
+  const { $, state, follow, openWith, applyPreviewSize, animateLayout, updateWatches, escapeHtml, ic, baseOf, dirOf, navigate, renderBreadcrumb, playChime, toast, TERM_LINK_RE_BARE, api, apiPost, shQuote, applySelection, openPreview, recordRecent, codexResumeLast, setPreviewMax, isMdName, isHtmlName, popupMenu, rippleFileArea, createTerminalShortcutActions } = deps;
 // ---------- 内嵌终端（仅桌面 app；浏览器版优雅降级）----------
 // Codex「等你拍板」界面特征，宁缺勿滥：
 // 不命中只是退化成「任务完成」标题，不会漏响）
@@ -558,35 +558,6 @@ const term = {
     if (this.active === id) this.activate(this.sessions[Math.max(0, i - 1)].id);
     else this.renderTabs();
   },
-  async closeActive() {
-    const session = this.sessions.find((x) => x.id === this.active);
-    if (!session) return false;
-    const foreground = await window.codexboxPty.hasForegroundProcess(session.id).catch(() => ({ ok: false, running: false }));
-    if (foreground.ok && foreground.running) {
-      if (this._closePrompting) return false;
-      this._closePrompting = true;
-      try {
-        const confirmed = await confirmDialog('当前终端仍在运行任务，关闭会立即终止任务。确定关闭？');
-        if (!confirmed) return false;
-      } finally { this._closePrompting = false; }
-    }
-    this.closeTab(session.id);
-    return true;
-  },
-  bindDesktopEvents() {
-    if (window.codexboxWin?.onNewTerminal && !this._removeNewTerminal) {
-      this._removeNewTerminal = window.codexboxWin.onNewTerminal(() => this.newTerminal());
-    }
-    if (window.codexboxWin?.onLaunchCodex && !this._removeLaunchCodex) {
-      this._removeLaunchCodex = window.codexboxWin.onLaunchCodex(() => this.launchCodex());
-    }
-    if (window.codexboxWin?.onLaunchNewCodex && !this._removeLaunchNewCodex) {
-      this._removeLaunchNewCodex = window.codexboxWin.onLaunchNewCodex(() => this.launchCodex({ resume: false }));
-    }
-    if (window.codexboxWin?.onCloseActiveTerminal && !this._removeCloseActiveTerminal) {
-      this._removeCloseActiveTerminal = window.codexboxWin.onCloseActiveTerminal(() => this.closeActive());
-    }
-  },
   fitActive() {
     const s = this.sessions.find((x) => x.id === this.active);
     if (!s || !s.fit) return;
@@ -792,8 +763,11 @@ const term = {
   // try/catch 兜住 GPU 故障，别让单个 session 的渲染异常连累其它 session 或拖垮渲染进程（#35）。
   retheme() { const th = this.theme(); this.sessions.forEach((s) => { try { s.xterm.options.theme = th; s.webgl?.clearTextureAtlas?.(); } catch { /* */ } }); },
 };
-
-
-
+  const shortcutActions = createTerminalShortcutActions({
+    term, pty: window.codexboxPty, win: window.codexboxWin, confirmDialog: deps.confirmDialog, toast,
+  });
+  term.closeActive = shortcutActions.closeActive;
+  term.restartActive = shortcutActions.restartActive;
+  term.bindDesktopEvents = shortcutActions.bindDesktopEvents;
   return term;
 }

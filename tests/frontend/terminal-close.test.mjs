@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 happy-dom 测试环境与 public/modules/terminal.js 终端控制器
- * [OUTPUT]: 验证桌面快捷键新建终端、新建无参数 Codex 会话，以及关闭活动终端的空闲直关、忙碌确认和事件绑定行为
- * [POS]: tests/frontend 的终端快捷键回归测试，保证 Cmd/Ctrl+T、Shift+N、W 复用终端控制器并保护运行中任务
+ * [OUTPUT]: 验证桌面快捷键新建终端、新建无参数 Codex 会话、重启当前命令及关闭活动终端行为
+ * [POS]: tests/frontend 的终端快捷键回归测试，保证 Cmd/Ctrl+T、Shift+N、Shift+R、W 复用终端控制器并保护运行中任务
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import assert from 'node:assert/strict';
@@ -9,21 +9,30 @@ import test from 'node:test';
 import { installDom, loadRendererModule } from './dom-environment.mjs';
 
 const { createTerminalController } = await loadRendererModule('terminal');
+const { createTerminalShortcutActions } = await loadRendererModule('terminal-shortcuts');
 
-function createController({ confirm = async () => true, foreground = async () => ({ ok: true, running: false }), query = () => null } = {}) {
+function createController({ confirm = async () => true, foreground = async () => ({ ok: true, running: false }), restart = async () => ({ ok: true }), query = () => null } = {}) {
   const killed = [];
-  window.codexboxPty = { kill: (id) => killed.push(id), hasForegroundProcess: foreground };
+  const restarted = [];
+  const toasts = [];
+  window.codexboxPty = {
+    kill: (id) => killed.push(id),
+    hasForegroundProcess: foreground,
+    restartCommand: (id) => { restarted.push(id); return restart(id); },
+  };
   const noop = () => {};
   const deps = new Proxy({
     $: query,
     state: {},
     follow: {},
     confirmDialog: confirm,
+    createTerminalShortcutActions,
+    toast: (...args) => toasts.push(args),
     updateWatches: noop,
   }, {
     get(target, key) { return key in target ? target[key] : noop; },
   });
-  return { term: createTerminalController(deps), killed };
+  return { term: createTerminalController(deps), killed, restarted, toasts };
 }
 
 function session(id, status = 'idle') {
@@ -104,39 +113,86 @@ test('界面状态仍为 busy 但 Shell 没有前台任务时直接关闭', asyn
   } finally { dom.cleanup(); }
 });
 
-test('桌面新建、启动 Codex、新建 Codex 会话与关闭事件各绑定一次', () => {
+test('桌面新建、启动 Codex、新建 Codex 会话、重启与关闭事件各绑定一次', () => {
   const dom = installDom();
   try {
     let subscribed = 0;
     let newHandler;
     let codexHandler;
     let newCodexHandler;
+    let restartHandler;
     let closeHandler;
     window.codexboxWin = {
       onNewTerminal(cb) { subscribed++; newHandler = cb; return () => {}; },
       onLaunchCodex(cb) { subscribed++; codexHandler = cb; return () => {}; },
       onLaunchNewCodex(cb) { subscribed++; newCodexHandler = cb; return () => {}; },
+      onRestartActiveCommand(cb) { subscribed++; restartHandler = cb; return () => {}; },
       onCloseActiveTerminal(cb) { subscribed++; closeHandler = cb; return () => {}; },
     };
     const { term } = createController();
     let created = 0;
     const launches = [];
     let closed = 0;
+    let restarted = 0;
     term.newTerminal = () => { created++; };
     term.launchCodex = (options) => { launches.push(options); };
     term.closeActive = () => { closed++; };
+    term.restartActive = () => { restarted++; };
 
     term.bindDesktopEvents();
     term.bindDesktopEvents();
     newHandler();
     codexHandler();
     newCodexHandler();
+    restartHandler();
     closeHandler();
 
-    assert.equal(subscribed, 4);
+    assert.equal(subscribed, 5);
     assert.equal(created, 1);
     assert.deepEqual(launches, [undefined, { resume: false }]);
     assert.equal(closed, 1);
+    assert.equal(restarted, 1);
+  } finally { dom.cleanup(); }
+});
+
+test('重新运行只作用于当前活动终端并反馈成功', async () => {
+  const dom = installDom();
+  try {
+    const { term, restarted, toasts } = createController();
+    term.sessions = [session('t1'), session('t2')];
+    term.active = 't2';
+
+    assert.equal(await term.restartActive(), true);
+    assert.deepEqual(restarted, ['t2']);
+    assert.deepEqual(toasts, [['已重新运行当前命令', false]]);
+  } finally { dom.cleanup(); }
+});
+
+test('重新运行期间忽略当前标签的重复请求', async () => {
+  const dom = installDom();
+  try {
+    let resolveRestart;
+    const pending = new Promise((resolve) => { resolveRestart = resolve; });
+    const { term, restarted, toasts } = createController({ restart: () => pending });
+    term.sessions = [session('t1')];
+    term.active = 't1';
+
+    const first = term.restartActive();
+    assert.equal(await term.restartActive(), false);
+    assert.deepEqual(restarted, ['t1']);
+    assert.deepEqual(toasts, [['当前命令正在重新运行']]);
+    resolveRestart({ ok: true });
+    assert.equal(await first, true);
+  } finally { dom.cleanup(); }
+});
+
+test('没有活动终端时不会调用 PTY 重启', async () => {
+  const dom = installDom();
+  try {
+    const { term, restarted, toasts } = createController();
+    assert.equal(await term.restartActive(), false);
+    assert.deepEqual(restarted, []);
+    assert.deepEqual(toasts, [['当前没有可重新运行的终端', true]]);
   } finally { dom.cleanup(); }
 });
 
