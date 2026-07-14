@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron PTY/恢复桥、xterm 浏览器资源、共享 state/follow 与文件导航回调
- * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、命令恢复、Codex 状态、拖放和布局
+ * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、命令恢复、Codex 继续/新建启动、状态、拖放和布局
  * [POS]: public/modules 的终端领域控制器，被应用事件层和文件跟随模块消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -108,14 +108,13 @@ const term = {
     if (wasHidden) setTimeout(write, 280); else write();
   },
   // 一键启动 Codex：始终在左侧当前目录新建标签，避免复用终端时沿用错误目录
-  async launchCodex() {
+  async launchCodex({ resume = codexResumeLast() } = {}) {
     if (!this.available()) { openWith(state.cwd, 'terminal'); return; } // 网页版降级到系统终端
     const sess = await this.openInDir(state.cwd); // 等 spawn 完，拿确切 session 写入
-    const resumeLast = codexResumeLast();
     if (sess && !sess.dead) {
-      this.input(sess.id, (resumeLast ? 'codex resume --last' : 'codex') + '\r');
+      this.input(sess.id, (resume ? 'codex resume --last' : 'codex') + '\r');
       sess.xterm.focus();
-      toast(resumeLast ? '正在继续最近 Codex 会话' : '已在终端启动新的 Codex 会话');
+      toast(resume ? '正在继续最近 Codex 会话' : '已在终端启动新的 Codex 会话');
     }
     else toast('终端启动失败', true);
   },
@@ -580,6 +579,9 @@ const term = {
     }
     if (window.codexboxWin?.onLaunchCodex && !this._removeLaunchCodex) {
       this._removeLaunchCodex = window.codexboxWin.onLaunchCodex(() => this.launchCodex());
+    }
+    if (window.codexboxWin?.onLaunchNewCodex && !this._removeLaunchNewCodex) {
+      this._removeLaunchNewCodex = window.codexboxWin.onLaunchNewCodex(() => this.launchCodex({ resume: false }));
     }
     if (window.codexboxWin?.onCloseActiveTerminal && !this._removeCloseActiveTerminal) {
       this._removeCloseActiveTerminal = window.codexboxWin.onCloseActiveTerminal(() => this.closeActive());

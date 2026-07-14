@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 happy-dom 测试环境与 public/modules/terminal.js 终端控制器
- * [OUTPUT]: 验证桌面快捷键新建终端，以及关闭活动终端的空闲直关、忙碌确认和事件绑定行为
- * [POS]: tests/frontend 的终端快捷键回归测试，保证 Cmd/Ctrl+T/W 复用终端控制器并保护运行中任务
+ * [OUTPUT]: 验证桌面快捷键新建终端、新建无参数 Codex 会话，以及关闭活动终端的空闲直关、忙碌确认和事件绑定行为
+ * [POS]: tests/frontend 的终端快捷键回归测试，保证 Cmd/Ctrl+T、Shift+N、W 复用终端控制器并保护运行中任务
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 import assert from 'node:assert/strict';
@@ -104,36 +104,56 @@ test('界面状态仍为 busy 但 Shell 没有前台任务时直接关闭', asyn
   } finally { dom.cleanup(); }
 });
 
-test('桌面新建、启动 Codex 与关闭事件各绑定一次并复用终端控制器', () => {
+test('桌面新建、启动 Codex、新建 Codex 会话与关闭事件各绑定一次', () => {
   const dom = installDom();
   try {
     let subscribed = 0;
     let newHandler;
     let codexHandler;
+    let newCodexHandler;
     let closeHandler;
     window.codexboxWin = {
       onNewTerminal(cb) { subscribed++; newHandler = cb; return () => {}; },
       onLaunchCodex(cb) { subscribed++; codexHandler = cb; return () => {}; },
+      onLaunchNewCodex(cb) { subscribed++; newCodexHandler = cb; return () => {}; },
       onCloseActiveTerminal(cb) { subscribed++; closeHandler = cb; return () => {}; },
     };
     const { term } = createController();
     let created = 0;
-    let launched = 0;
+    const launches = [];
     let closed = 0;
     term.newTerminal = () => { created++; };
-    term.launchCodex = () => { launched++; };
+    term.launchCodex = (options) => { launches.push(options); };
     term.closeActive = () => { closed++; };
 
     term.bindDesktopEvents();
     term.bindDesktopEvents();
     newHandler();
     codexHandler();
+    newCodexHandler();
     closeHandler();
 
-    assert.equal(subscribed, 3);
+    assert.equal(subscribed, 4);
     assert.equal(created, 1);
-    assert.equal(launched, 1);
+    assert.deepEqual(launches, [undefined, { resume: false }]);
     assert.equal(closed, 1);
+  } finally { dom.cleanup(); }
+});
+
+test('新建 Codex 会话快捷键只执行不带参数的 codex', async () => {
+  const dom = installDom();
+  try {
+    const { term } = createController();
+    const writes = [];
+    let focused = 0;
+    term.available = () => true;
+    term.openInDir = async () => ({ id: 'fresh', dead: false, xterm: { focus: () => { focused++; } } });
+    term.input = (id, data) => writes.push([id, data]);
+
+    await term.launchCodex({ resume: false });
+
+    assert.deepEqual(writes, [['fresh', 'codex\r']]);
+    assert.equal(focused, 1);
   } finally { dom.cleanup(); }
 });
 

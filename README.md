@@ -204,6 +204,8 @@ npm run dist         # 打包签名 .dmg（产物在 dist/，不入 git）/ buil
 |---|---|---|---|
 | 全局搜索 / Global search | `⌘K` | 用编辑器打开 / Open in editor | `⌘↵` |
 | 折叠侧栏 / Toggle sidebar | `⌘B` | 后退 / Back | `⌘[` |
+| 启动 Codex（遵循设置）/ Launch Codex | `⌘⇧T` | 新建 Codex 会话 / New Codex session | `⌘⇧N` |
+| 新建终端 / New terminal | `⌘T` | 关闭当前终端 / Close terminal | `⌘W` |
 | 终端标签 1–8 / Terminal tabs 1–8 | `⌘1`–`⌘8` | 最后一个终端标签 / Last terminal tab | `⌘9` |
 | 当前目录筛选 / Filter current folder | `/` | 打开/预览 / Open/preview | `↵` |
 | 结果上下选择 / Navigate results | `↑` `↓` | 关闭 / Close | `Esc` |
