@@ -1,0 +1,25 @@
+/**
+ * [INPUT]: 依赖 public/styles/preview.css 与 terminal.css 的分割线样式
+ * [OUTPUT]: 验证文件预览与终端分割线保留宽命中区，并由手柄自身绘制方向一致的 1px 悬停线
+ * [POS]: tests/frontend 的分割线视觉契约测试，防止绝对定位伪元素再次跨出手柄区域
+ * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+ */
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+const previewCss = await readFile(new URL('../../public/styles/preview.css', import.meta.url), 'utf8');
+const terminalCss = await readFile(new URL('../../public/styles/terminal.css', import.meta.url), 'utf8');
+
+test('分割线保留 6px 拖拽命中区', () => {
+  assert.match(previewCss, /#preview-resizer\s*\{[^}]*flex:\s*0 0 6px/);
+  assert.match(terminalCss, /#terminal-resizer\s*\{[^}]*flex:\s*0 0 6px/);
+});
+
+test('横向和竖向手柄由自身背景绘制居中的 1px 主题线', () => {
+  assert.match(previewCss, /#preview-resizer, #terminal-resizer\s*\{[^}]*background-image:\s*linear-gradient\(var\(--accent\), var\(--accent\)\)[^}]*background-position:\s*center[^}]*background-repeat:\s*no-repeat/);
+  assert.match(previewCss, /\.dock-bottom #preview-resizer, \.dock-right #terminal-resizer\s*\{[^}]*background-size:\s*1px 100%/);
+  assert.match(previewCss, /\.dock-right #preview-resizer, \.dock-bottom #terminal-resizer\s*\{[^}]*background-size:\s*100% 1px/);
+  assert.match(previewCss, /#preview-resizer:hover, #preview-resizer\.dragging,[\s\S]*#terminal-resizer:hover, #terminal-resizer\.dragging\s*\{[^}]*opacity:/);
+  assert.doesNotMatch(previewCss, /#(?:preview|terminal)-resizer::after/);
+});

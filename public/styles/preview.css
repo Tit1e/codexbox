@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 index.html 的 DOM 结构与 base.css 定义的主题变量
- * [OUTPUT]: 对外提供预览面板、Git 变更弹层、命令面板、状态组件与内容查看器样式
- * [POS]: public/styles 的预览面板、命令面板、状态组件与内容查看器样式分片，按 index.html 声明顺序参与级联
+ * [OUTPUT]: 对外提供预览面板、共用分割线、Git 变更弹层、命令面板、状态组件与内容查看器样式
+ * [POS]: public/styles 的预览面板与分割线样式分片，按 index.html 声明顺序参与级联
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 /* ---------- 预览面板 ---------- */
@@ -172,14 +172,24 @@
 
 /* 预览面板拖拽手柄 */
 /* 预览分隔条：作为 flex 同级；轴向随 dock 翻转 */
-#preview-resizer { flex: 0 0 6px; background: transparent; z-index: 5; position: relative; }
+#preview-resizer { flex: 0 0 6px; background-color: transparent; z-index: 5; position: relative; }
 #preview-resizer.hidden { display: none; }
 .dock-bottom #preview-resizer { cursor: col-resize; }
 .dock-right #preview-resizer { cursor: row-resize; }
-/* 拖拽条平时隐形，hover/拖动时浮现 2px 细线（inset 2px 同时适配横竖两个方向） */
-#preview-resizer::after, #terminal-resizer::after { content: ''; position: absolute; inset: 2px; border-radius: 1px; background: var(--accent); opacity: 0; transition: opacity 0.15s ease 0.08s; }
-#preview-resizer:hover::after, #preview-resizer.dragging::after,
-#terminal-resizer:hover::after, #terminal-resizer.dragging::after { opacity: 0.55; }
+/* 视觉线由手柄自身绘制，避免绝对定位伪元素跨出分栏；6px 命中区保持不变 */
+#preview-resizer, #terminal-resizer {
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-position: center; background-repeat: no-repeat;
+  opacity: 0; transition: opacity 0.15s ease 0.08s;
+}
+.dock-bottom #preview-resizer, .dock-right #terminal-resizer {
+  background-size: 1px 100%;
+}
+.dock-right #preview-resizer, .dock-bottom #terminal-resizer {
+  background-size: 100% 1px;
+}
+#preview-resizer:hover, #preview-resizer.dragging,
+#terminal-resizer:hover, #terminal-resizer.dragging { opacity: 0.55; }
 .pv-img { cursor: zoom-in; }
 /* 图片全屏：在窗口中居中，并整图缩放到铺满可视区（约束 max-height 避免 flex 居中把高图顶部裁掉） */
 #preview.is-max .preview-body:has(> .pv-img) { display: flex; align-items: center; justify-content: center; }

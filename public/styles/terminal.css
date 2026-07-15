@@ -23,7 +23,7 @@
 #main-body.term-max > #terminal-panel { flex: 1 1 auto !important; width: 100% !important; height: 100% !important; }
 #content { min-height: 0; min-width: 0; }
 
-#terminal-resizer { flex: 0 0 6px; background: transparent; z-index: 5; position: relative; }
+#terminal-resizer { flex: 0 0 6px; background-color: transparent; z-index: 5; position: relative; }
 #terminal-resizer.hidden { display: none; }
 .dock-bottom #terminal-resizer { width: 100%; cursor: row-resize; }
 .dock-right #terminal-resizer { height: 100%; cursor: col-resize; }
