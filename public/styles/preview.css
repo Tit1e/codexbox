@@ -323,17 +323,30 @@
 
 
 /* 首次引导 */
-.guide-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 400; }
-.guide-card { width: 460px; max-width: 90vw; background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 32px; box-shadow: var(--shadow); }
-.guide-logo { font-size: 44px; text-align: center; color: var(--accent); }
-.guide-card h2 { text-align: center; margin: 8px 0 14px; font-size: 20px; }
-.guide-card p { color: var(--text-dim); margin-bottom: 14px; }
-.guide-card ul { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; }
-.guide-card li { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); padding-left: 14px; border-left: 2px solid var(--accent); }
-.guide-card li b { color: var(--text); }
-.guide-card code { background: var(--bg-3); padding: 1px 6px; border-radius: 4px; color: var(--accent); font-size: 12px; }
-.guide-card button { width: 100%; padding: 11px; background: var(--accent); border: none; border-radius: 9px; color: var(--accent-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.guide-overlay { position: fixed; inset: 0; padding: 20px; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 400; }
+.guide-card { width: 620px; max-width: 94vw; max-height: calc(100vh - 40px); overflow-y: auto; background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; box-shadow: var(--shadow); }
+.guide-logo { height: 46px; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.guide-card h2 { text-align: center; margin: 5px 0 7px; font-size: 20px; }
+.guide-card .guide-lead { color: var(--text-dim); margin: 0 0 18px; text-align: center; font-size: 13px; }
+.guide-card h3 { margin: 0 0 9px; color: var(--text); font-size: 12px; font-weight: 700; }
+.guide-features { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 9px 18px; margin-bottom: 18px; }
+.guide-features li { min-width: 0; padding-left: 10px; border-left: 2px solid var(--accent); }
+.guide-features li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.guide-features b { display: block; margin-bottom: 2px; color: var(--text); font-size: 12.5px; }
+.guide-features span { display: block; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
+.guide-shortcuts { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; margin-bottom: 12px; }
+.guide-shortcuts > div { min-width: 0; display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.guide-shortcuts kbd { width: fit-content; max-width: 100%; color: var(--accent); font-family: var(--font-mono); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.guide-shortcuts span { min-width: 0; color: var(--text-dim); font-size: 11.5px; }
+.guide-card .guide-reopen { margin: 0 0 12px; color: var(--text-faint); text-align: center; font-size: 11.5px; }
+.guide-card button { width: 100%; padding: 11px; background: var(--accent); border: none; border-radius: 8px; color: var(--accent-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
 .guide-card button:hover { filter: brightness(1.1); }
+@media (max-width: 620px) {
+  .guide-overlay { padding: 10px; }
+  .guide-card { max-width: 100%; max-height: calc(100vh - 20px); padding: 20px; }
+  .guide-features, .guide-shortcuts { grid-template-columns: 1fr; }
+  .guide-features li:last-child:nth-child(odd) { grid-column: auto; }
+}
 
 /* 细圆角胶囊 + 透明边距（macOS overlay 风格）；hover 色跟主题走，别写死深色 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

@@ -15,6 +15,6 @@ preview.js: 文件预览与布局控制器，管理内容预览、单文件 Git 
 sidebar.js: 侧边栏领域控制器，管理根目录元数据、收藏业务与 Codex 项目会话操作，三个列表渲染委托 Svelte 服务
 terminal.js: 终端领域控制器，管理多标签 PTY、选择性命令恢复、Codex 继续/无参数新建、当前命令重启、状态、文件拖放和停靠布局
 terminal-shortcuts.js: 终端快捷动作控制器，统一处理活动标签关闭保护、命令重启并发保护和 Electron 桌面事件绑定
-ui-controller.js: 界面编排控制器，管理全局事件、主题、尺寸拖拽、终端设置和首次引导
+ui-controller.js: 界面编排控制器，管理全局事件、主题、尺寸拖拽、终端设置、首次引导和手动重开指南
 
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md

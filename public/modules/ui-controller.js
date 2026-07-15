@@ -1,30 +1,54 @@
 /**
  * [INPUT]: 依赖共享 state、Svelte 按钮组同步回调、终端/命令面板控制器及文件和预览动作
- * [OUTPUT]: 对外提供 createUiController，管理全局事件、主题、拖拽尺寸和首次引导
+ * [OUTPUT]: 对外提供 createUiController，管理全局事件、主题、拖拽尺寸、首次引导和手动重开指南
  * [POS]: public/modules 的界面编排控制器，被应用启动入口消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 export function createUiController(deps) {
   const { $, state, term, cmdk, toast, goBack, goUp, renderFiles, openPreview, closePreview, toggleSidebar, applyPreviewSize, setFileFollow, follow, doCreate, doTrash, doRename, diskPanel, organizeLaunch, popupMenu, mona, svgWrap, SVG, openWith, playChime, shotTray, dropFilesInto, dropUrlInto, runtime, undoImage, isPreviewMax, setPreviewMax, moveCursor, cursorEnter, toggleFav, setThemeControlValue } = deps;
-// ---------- 首次引导 ----------
-function maybeShowGuide() {
-  if (localStorage.getItem('codexbox_guided')) return;
+// ---------- 使用指南 ----------
+function showGuide(markGuided = false) {
+  if (document.querySelector('.guide-overlay')) return false;
   const ov = document.createElement('div');
   ov.className = 'guide-overlay';
   ov.innerHTML = `<div class="guide-card">
     <div class="guide-logo">${svgWrap(SVG.box, 'currentColor', 46, true)}</div>
     <h2>欢迎用 CodexBox</h2>
-    <p>Codex 的驾驶舱——找文件、跑 Codex、看它改、随手改，都在一个窗口：</p>
-    <ul>
-      <li><b>⌘K</b> 全局搜文件和文件夹；<b>⌘↵</b> 把项目直接在编辑器整包打开；<code>内容:关键词</code> 搜文件里的字</li>
-      <li>顶部 <b>终端</b> 按钮开内嵌终端跑 Codex；<b>把文件/文件夹拖进终端</b> 即插入路径喂给它当上下文</li>
-      <li><b>单击</b> 预览，<b>双击</b> 系统打开；预览里 <b>编辑</b> md 走所见即所得、<b>编辑图片</b> 可标注/打码/转格式</li>
-      <li>Codex 改了哪些文件，列表实时高亮「改·N」，不用切窗口盯着看</li>
+    <p class="guide-lead">从找项目、运行 Codex 到核对改动，常用能力都在这一个窗口。</p>
+    <h3>核心工作流</h3>
+    <ul class="guide-features">
+      <li><b>找文件与预览</b><span>全局搜索文件与内容，单击预览、双击系统打开；Markdown、代码和图片都可直接编辑。</span></li>
+      <li><b>启动 Codex</b><span>按终端设置继续最近会话，或新开无参数会话；把文件或文件夹拖进终端即可加入上下文。</span></li>
+      <li><b>跟踪与核对改动</b><span>开启文件跟随后，文件区和预览会追踪当前 Codex；Git 状态可直接打开工作区 Diff。</span></li>
+      <li><b>多终端工作</b><span>用数字键快速切换标签；重新运行会先停止当前服务，等 Shell 就绪后再执行原命令。</span></li>
+      <li><b>找回历史任务</b><span>左侧 Codex 项目汇总本机会话；退出时保存的运行命令，可在下次启动时选择恢复。</span></li>
     </ul>
-    <button id="guide-ok">开始使用</button>
+    <h3>常用快捷键</h3>
+    <div class="guide-shortcuts">
+      <div><kbd>⌘K</kbd><span>全局搜索</span></div>
+      <div><kbd>/</kbd><span>当前目录筛选</span></div>
+      <div><kbd>⌘↵</kbd><span>用编辑器打开</span></div>
+      <div><kbd>↑↓ / ↵ / Esc</kbd><span>选择、打开与关闭</span></div>
+      <div><kbd>⌘⇧T</kbd><span>按设置启动 Codex</span></div>
+      <div><kbd>⌘⇧N</kbd><span>新建 Codex 会话</span></div>
+      <div><kbd>⌘T / ⌘W</kbd><span>新建与关闭终端</span></div>
+      <div><kbd>⌘1–9</kbd><span>切换终端标签</span></div>
+      <div><kbd>⌘⇧R</kbd><span>重新运行当前命令</span></div>
+      <div><kbd>⌘B / ⌘[</kbd><span>切换侧栏与后退</span></div>
+    </div>
+    <p class="guide-reopen">右上角的 ? 按钮可以随时重新打开本指南。</p>
+    <button id="guide-ok">${markGuided ? '开始使用' : '关闭指南'}</button>
   </div>`;
   document.body.appendChild(ov);
-  $('#guide-ok').onclick = () => { localStorage.setItem('codexbox_guided', '1'); ov.remove(); };
+  $('#guide-ok').onclick = () => {
+    if (markGuided) localStorage.setItem('codexbox_guided', '1');
+    ov.remove();
+  };
+  return true;
+}
+function maybeShowGuide() {
+  if (localStorage.getItem('codexbox_guided')) return false;
+  return showGuide(true);
 }
 
 // ---------- 预览面板拖拽调宽 ----------
@@ -195,6 +219,7 @@ function bindEvents() {
   // ←/↑ 顶栏按钮已删（与面包屑功能重复、且和 macOS 红绿灯冲突）；后退/上一级保留 ⌘[ 和 Backspace 快捷键
   $('#preview-close').onclick = closePreview;
   $('#cmdk-trigger').onclick = () => cmdk.open();
+  $('#btn-guide').onclick = () => showGuide();
   $('#btn-terminal').onclick = () => term.toggle();
   bindCodexControls();
   shotTray.init();
@@ -373,5 +398,5 @@ function applyTheme(skin, rerender = true) {
   }
 }
 
-  return { maybeShowGuide, bindResizer, bindTerminalResizer, codexResumeLast, bindCodexControls, bindEvents, updateGridSizeVisibility, applyTheme };
+  return { showGuide, maybeShowGuide, bindResizer, bindTerminalResizer, codexResumeLast, bindCodexControls, bindEvents, updateGridSizeVisibility, applyTheme };
 }
