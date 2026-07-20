@@ -861,7 +861,7 @@ const term = {
   renderTabs() {
     const bar = $('#term-tabs');
     bar.innerHTML = '';
-    this.sessions.forEach((s) => {
+    this.tabSessions().forEach((s) => {
       const t = document.createElement('div');
       const dotState = s.dead ? 'dead' : (s.status === 'busy' ? 'busy' : 'idle');
       const followed = follow.on && follow.sid === s.id; // 文件跟随正盯着这个 tab

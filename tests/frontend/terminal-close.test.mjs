@@ -244,6 +244,21 @@ test('项目运行命令按规则目录创建隐藏服务会话，并以规则 I
   } finally { dom.cleanup(); }
 });
 
+test('隐藏的项目服务不占终端标签，查看输出后才显示', () => {
+  const dom = installDom('<div id="term-tabs"></div>');
+  try {
+    const { term } = createController({ query: (selector) => document.querySelector(selector) });
+    term.sessions = [{ ...session('service_1'), kind: 'service', revealed: false, title: 'web', cwd: '/repo' }];
+
+    term.renderTabs();
+    assert.equal(document.querySelectorAll('.term-tab').length, 0);
+
+    term.sessions[0].revealed = true;
+    term.renderTabs();
+    assert.equal(document.querySelectorAll('.term-tab').length, 1);
+  } finally { dom.cleanup(); }
+});
+
 test('新建终端快捷键会先展开已收起的终端面板', () => {
   const dom = installDom();
   try {
