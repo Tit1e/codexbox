@@ -50,6 +50,7 @@ kbd {
 .nav-list li.active { background: var(--accent-soft); color: var(--accent); }
 .nav-list li .ico { flex-shrink: 0; }
 .nav-list li .label { overflow: hidden; text-overflow: ellipsis; }
+.nav-list li .project-run-indicator { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 17%, transparent); }
 .nav-list li .unfav { margin-left: auto; opacity: 0; font-size: 11px; }
 .nav-list li:hover .unfav { opacity: 0.6; }
 .nav-empty { padding: 4px 8px; font-size: 12px; color: var(--text-faint); }

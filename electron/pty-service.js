@@ -64,7 +64,7 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
     pending.resolve(result);
   }
 
-  function spawn({ id, cwd, cols, rows }) {
+  function spawn({ id, cwd, cols, rows, kind }) {
     if (!pty) return { ok: false, error: 'node-pty 未编译，跑：npm run rebuild' };
     if (!validPtyId(id)) return { ok: false, error: '终端 ID 非法' };
     if (terminals.has(id)) return { ok: false, error: '终端 ID 已存在' };
@@ -89,7 +89,7 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
         name: 'xterm-256color', cols: size.cols, rows: size.rows, cwd: startCwd, env,
       });
     } catch (err) { return { ok: false, error: err.message }; }
-    const record = { terminal, startCwd, command: '', markerToken, markerState: { carry: '' }, restart: null };
+    const record = { terminal, startCwd, command: '', kind: kind === 'service' ? 'service' : 'terminal', markerToken, markerState: { carry: '' }, restart: null };
     terminals.set(id, record);
     notifyCount();
     terminal.onData((data) => {
@@ -206,7 +206,11 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
         const result = await foregroundProcess(record.terminal.pid);
         if (!result.ok || !result.running) return null;
         const cwdValue = await cwdLookup(record.terminal.pid);
-        return { running: true, cwd: cwdValue || record.startCwd, command: record.command, title: path.basename(cwdValue || record.startCwd) || 'shell' };
+        return {
+          running: true, cwd: cwdValue || record.startCwd, command: record.command,
+          title: path.basename(cwdValue || record.startCwd) || 'shell',
+          ...(record.kind === 'service' ? { kind: 'service' } : {}),
+        };
       } catch { return null; }
     }));
     return snapshots.filter(Boolean);

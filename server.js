@@ -19,6 +19,7 @@ const { createGitService } = require('./server/git-service');
 const { createFileService } = require('./server/file-service');
 const { createDeveloperTools } = require('./server/developer-tools');
 const { createMediaService } = require('./server/media-service');
+const { createRunRuleService } = require('./server/run-rule-service');
 const { hostAllowed, originAllowed, readBody, sendJSON } = require('./server/http-security');
 const { createAppServer } = require('./server/app-server');
 const { createPreviewServer } = require('./server/preview-server');
@@ -32,6 +33,7 @@ const PUBLIC = path.join(__dirname, 'public');
 const PLATFORM = process.platform;
 const { resolvePath } = createPathService(HOME);
 const { readConfig, updateConfig } = createConfigStore(CONFIG_FILE);
+const { ruleFor, saveRule } = createRunRuleService({ resolvePath, readConfig, updateConfig });
 const { listDir, readFile, searchFiles, grepFiles, contentSearch, mdfind } = createBrowserService({
   platform: PLATFORM,
   resolvePath,
@@ -63,7 +65,7 @@ const services = {
   gitStatus, gitFileDiff, openInOS, updateConfig, writeTextFile, archiveList, diskUsage,
   organizeLaunch, releaseInspect, releasePrepare, trashPath, movePath, renamePath,
   saveImage, createEntry, inspectCodexProjectSessions, mutateCodexProjectSessions,
-  codexProjects, readConfig, serveRaw, serveHtmlPreview, serveThumb, serveStatic, defaultRoots,
+  codexProjects, readConfig, ruleFor, saveRule, serveRaw, serveHtmlPreview, serveThumb, serveStatic, defaultRoots,
 };
 const server = createAppServer({
   home: HOME, platform: PLATFORM, port: PORT, resolvePath, ext, pathSeparator: path.sep,

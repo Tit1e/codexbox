@@ -12,7 +12,8 @@ const crypto = require('crypto');
 
 function validEntry(value) {
   return value && typeof value.cwd === 'string' && path.isAbsolute(value.cwd)
-    && typeof value.command === 'string' && value.command.trim() && value.command.length <= 16384;
+    && typeof value.command === 'string' && value.command.trim() && value.command.length <= 16384
+    && (value.kind === undefined || value.kind === 'service');
 }
 
 function createTerminalRecoveryStore(userData, fileSystem = fs) {
@@ -37,7 +38,11 @@ function createTerminalRecoveryStore(userData, fileSystem = fs) {
       if (/^\s/.test(item.command)) continue;
       const duplicate = next.find((entry) => entry.cwd === item.cwd && entry.command === item.command);
       if (duplicate) duplicate.savedAt = now;
-      else next.push({ id: crypto.randomUUID(), cwd: item.cwd, command: item.command, title: item.title || path.basename(item.cwd), savedAt: now });
+      else next.push({
+        id: crypto.randomUUID(), cwd: item.cwd, command: item.command,
+        title: item.title || path.basename(item.cwd), savedAt: now,
+        ...(item.kind === 'service' ? { kind: 'service' } : {}),
+      });
     }
     write(next);
     return next;

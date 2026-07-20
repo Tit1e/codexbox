@@ -95,6 +95,9 @@
 .xterm-instance { position: absolute; inset: 0; display: none; }
 .xterm-instance.show { display: block; }
 .xterm-instance .xterm { height: 100%; }
+/* 服务会话保留 xterm scrollback，默认缩成不可见的 1px，不占用普通终端标签。 */
+.xterm-instance.service-host { display: block; visibility: hidden; inset: 0 auto auto 0; width: 1px; height: 1px; overflow: hidden; }
+.xterm-instance.service-host.show { visibility: visible; inset: 0; width: auto; height: auto; }
 
 /* ---------- 桌面 app：交通灯避让 + 顶部可拖拽 ---------- */
 /* hiddenInset 标题栏的红绿灯坐在左上角，给侧栏 logo 让出空间（浏览器版无此问题，不受影响）*/

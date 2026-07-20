@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron PTY/恢复桥、xterm 浏览器资源、terminal-shortcuts.js 工厂、共享 state/follow 与文件导航回调
- * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、命令恢复、Codex 启动、命令重启、状态、拖放和布局
+ * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、隐藏服务会话、命令恢复、Codex 启动、命令重启、状态、拖放和布局
  * [POS]: public/modules 的终端领域控制器，被应用事件层和文件跟随模块消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -42,7 +42,9 @@ const term = {
     $('#terminal-panel').classList.remove('hidden');
     $('#terminal-resizer').classList.remove('hidden');
     this.applyDock();
-    if (!this.sessions.length) this.newTab();
+    const interactive = this.tabSessions();
+    if (!interactive.length) this.newTab();
+    else if (!this.active || !interactive.some((session) => session.id === this.active)) this.activate(interactive[0].id);
     else this.fitActive();
     $('#btn-terminal').classList.add('active');
     localStorage.setItem('codexbox_term_open', '1');
@@ -128,13 +130,21 @@ const term = {
   // 恢复记录已经在主进程中一次性取出；逐条创建终端并执行，单条失败不阻断其余任务。
   async restoreCommands(entries) {
     if (!this.available() || !Array.isArray(entries) || !entries.length) return 0;
-    $('#terminal-panel').classList.remove('hidden');
-    $('#terminal-resizer').classList.remove('hidden');
-    $('#btn-terminal').classList.add('active');
-    localStorage.setItem('codexbox_term_open', '1');
-    this.applyDock();
+    const restoresTerminal = entries.some((entry) => entry.kind !== 'service');
+    if (restoresTerminal) {
+      $('#terminal-panel').classList.remove('hidden');
+      $('#terminal-resizer').classList.remove('hidden');
+      $('#btn-terminal').classList.add('active');
+      localStorage.setItem('codexbox_term_open', '1');
+      this.applyDock();
+    }
     let restored = 0;
     for (const entry of entries) {
+      if (entry.kind === 'service') {
+        const result = await this.startProjectRun(entry.cwd, entry.command);
+        if (result.ok) restored++;
+        continue;
+      }
       const sess = await this.newTab(entry.cwd);
       if (!sess || sess.dead) continue;
       this.input(sess.id, entry.command + '\r');
@@ -258,13 +268,14 @@ const term = {
       }
     } catch { /* 取不到就保持原标题 */ }
   },
-  async newTab(cwdOverride) {
+  async newTab(cwdOverride, options = {}) {
     const startDir = cwdOverride || state.cwd;
+    const kind = options.kind === 'service' ? 'service' : 'terminal';
     const id = 't' + (++this.seq);
     const host = document.createElement('div');
-    host.className = 'xterm-instance';
+    host.className = 'xterm-instance' + (kind === 'service' ? ' service-host' : '');
     $('#xterm-host').appendChild(host);
-    host.classList.add('show'); // 先可见再 open/fit：display:none 下 fit 量不出尺寸，PTY 会以 80 列出生
+    if (kind !== 'service') host.classList.add('show'); // 普通标签先可见再 open/fit：display:none 下 fit 量不出尺寸，PTY 会以 80 列出生
     const FitCtor = window.FitAddon ? (window.FitAddon.FitAddon || window.FitAddon) : null;
     const xterm = new window.Terminal({
       fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--font-term').trim() || 'monospace',
@@ -301,12 +312,21 @@ const term = {
         this.watchAtlas(wg);
       } catch { wg = null; /* 回退默认 DOM renderer */ }
     }
-    if (fit) try { fit.fit(); } catch { /* */ }
-    const sess = { id, xterm, fit, host, webgl: wg, dead: false, status: 'idle', unread: false, startDir, title: baseOf(startDir || '') || 'shell' };
+    if (fit && kind !== 'service') try { fit.fit(); } catch { /* */ }
+    const sess = {
+      id, xterm, fit, host, webgl: wg, dead: false, status: 'idle', unread: false, startDir,
+      title: options.title || baseOf(startDir || '') || 'shell', kind,
+      projectRoot: kind === 'service' ? (options.projectRoot || startDir) : null,
+      projectCommand: kind === 'service' ? (options.projectCommand || '') : '',
+      revealed: false,
+    };
     this.sessions.push(sess);
-    this.activate(id);
+    if (kind !== 'service') this.activate(id);
+    else this.renderTabs();
     updateWatches(); // 新终端的项目目录也纳入监听
-    const r = await window.codexboxPty.spawn({ id, cwd: startDir, cols: xterm.cols, rows: xterm.rows });
+    const r = await window.codexboxPty.spawn({
+      id, cwd: startDir, cols: kind === 'service' ? 120 : xterm.cols, rows: kind === 'service' ? 24 : xterm.rows, kind,
+    });
     if (!r.ok) { sess.dead = true; xterm.write('\r\n  \x1b[31m终端启动失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || startDir; // 末尾 renderTabs 统一带上 cwd 重画
     xterm.onData((d) => {
@@ -314,7 +334,7 @@ const term = {
       this.input(id, d);
     });
     xterm.onResize(({ cols, rows }) => { sess.lastInput = Date.now(); window.codexboxPty.resize(id, cols, rows); }); // resize 引发的 TUI 重绘不算 agent 干活
-    window.codexboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
+    if (kind !== 'service') window.codexboxPty.resize(id, xterm.cols, xterm.rows); // spawn 等待期间 fit 过的 resize 事件无人监听会丢：补发一次对齐 PTY
 
     // 自定义键盘处理：macOS 用 ⌘，其它平台用 Ctrl；纯 Ctrl 按键在 macOS 交给终端程序
     xterm.attachCustomKeyEventHandler((e) => {
@@ -500,10 +520,74 @@ const term = {
     this.renderTabs();
     return sess;
   },
+  tabSessions() { return this.sessions.filter((session) => session.kind !== 'service' || session.revealed); },
+  serviceSession(root) { return this.sessions.find((session) => session.kind === 'service' && session.projectRoot === root); },
+  async startProjectRun(root, command) {
+    if (!this.available()) return { ok: false, error: '内嵌终端不可用（网页版没有运行服务）' };
+    let session = this.serviceSession(root);
+    if (session && !session.dead) {
+      session.projectCommand = command;
+      const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
+      if (foreground?.ok && foreground.running) return { ok: true, id: session.id, running: true, reused: true };
+    } else {
+      session = await this.newTab(root, { kind: 'service', projectRoot: root, projectCommand: command, title: baseOf(root) || 'service' });
+    }
+    if (!session || session.dead) return { ok: false, error: '运行服务启动失败' };
+    this.input(session.id, command + '\r');
+    return { ok: true, id: session.id, running: true };
+  },
+  async projectRunState(root) {
+    const session = this.serviceSession(root);
+    if (!session || session.dead) return { root, running: false };
+    try {
+      const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
+      return { root, id: session.id, command: session.projectCommand, running: foreground?.ok === true && foreground.running === true };
+    } catch { return { root, id: session.id, command: session.projectCommand, running: false }; }
+  },
+  async projectRunStates() {
+    return Promise.all(this.sessions
+      .filter((session) => session.kind === 'service')
+      .map((session) => this.projectRunState(session.projectRoot)));
+  },
+  async restartProjectRun(root) {
+    const session = this.serviceSession(root);
+    if (!session || session.dead) return { ok: false, error: '运行服务不存在' };
+    return window.codexboxPty.restartCommand(session.id);
+  },
+  async stopProjectRun(root) {
+    const session = this.serviceSession(root);
+    if (!session || session.dead) return { ok: false, error: '运行服务不存在' };
+    const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
+    if (!foreground?.ok || !foreground.running) return { ok: false, error: '当前没有正在运行的命令' };
+    this.input(session.id, '\x03');
+    return { ok: true };
+  },
+  revealProjectRun(root) {
+    const session = this.serviceSession(root);
+    if (!session || session.dead) return false;
+    session.revealed = true;
+    $('#terminal-panel').classList.remove('hidden');
+    $('#terminal-resizer').classList.remove('hidden');
+    this.applyDock();
+    $('#btn-terminal').classList.add('active');
+    localStorage.setItem('codexbox_term_open', '1');
+    this.activate(session.id);
+    return true;
+  },
+  hideProjectRun(id) {
+    const session = this.sessions.find((item) => item.id === id && item.kind === 'service');
+    if (!session) return false;
+    session.revealed = false;
+    const next = this.tabSessions().find((item) => item.id !== id);
+    if (next) this.activate(next.id);
+    else this.close();
+    this.renderTabs();
+    return true;
+  },
   newTerminal() {
     if (!this.available()) { if (state.cwd) openWith(state.cwd, 'terminal'); return null; }
     const hidden = $('#terminal-panel').classList.contains('hidden');
-    const hadSessions = this.sessions.length > 0;
+    const hadSessions = this.tabSessions().length > 0;
     if (hidden) this.open();
     // open() 会在首次展开且没有会话时自动创建一个，避免首次 Cmd+T 连开两个标签。
     if (hidden && !hadSessions) return null;
@@ -512,14 +596,15 @@ const term = {
   async respawn(sess) {
     sess.dead = false;
     sess.xterm.reset(); // 清掉死亡残留，新 shell 提示符不和旧画面叠在一起
-    const r = await window.codexboxPty.spawn({ id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows });
+    const r = await window.codexboxPty.spawn({ id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows, kind: sess.kind });
     if (!r.ok) { sess.dead = true; sess.xterm.write('\x1b[31m重开失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || sess.startDir;
   },
   // 对齐 Chrome：1-8 按顺序选标签，9 永远选最后一个；不存在时不创建会话
   activateByShortcut(number) {
-    const index = number === 9 ? this.sessions.length - 1 : number - 1;
-    const target = index >= 0 ? this.sessions[index] : null;
+    const tabs = this.tabSessions();
+    const index = number === 9 ? tabs.length - 1 : number - 1;
+    const target = index >= 0 ? tabs[index] : null;
     if (!target) {
       toast(number === 9 ? '没有可切换的终端标签' : `没有第 ${number} 个终端标签`);
       return;
@@ -528,6 +613,8 @@ const term = {
     this.activate(target.id);
   },
   activate(id) {
+    const target = this.sessions.find((session) => session.id === id);
+    if (!target || (target.kind === 'service' && !target.revealed)) return;
     this.active = id;
     this.sessions.forEach((s) => s.host.classList.toggle('show', s.id === id));
     const cur = this.sessions.find((x) => x.id === id);
@@ -549,6 +636,7 @@ const term = {
     const i = this.sessions.findIndex((x) => x.id === id);
     if (i < 0) return;
     const s = this.sessions[i];
+    if (s.kind === 'service') { this.hideProjectRun(id); return; }
     try { window.codexboxPty.kill(id); } catch { /* */ }
     try { s.xterm.dispose(); } catch { /* */ }
     s.host.remove();
@@ -614,7 +702,7 @@ const term = {
   // 对所有已开标签立即生效；选择存 localStorage，新标签在创建处同样遵守
   setWebgl(on) {
     try { if (on) localStorage.removeItem('codexbox.noWebgl'); else localStorage.setItem('codexbox.noWebgl', '1'); } catch { /* */ }
-    this.sessions.forEach((s) => {
+    this.tabSessions().forEach((s) => {
       try {
         if (!on && s.webgl) { s.webgl.dispose(); s.webgl = null; }
         else if (on && !s.webgl && !window.__noWebgl && window.WebglAddon) {
@@ -748,12 +836,12 @@ const term = {
       const dotState = s.dead ? 'dead' : (s.status === 'busy' ? 'busy' : 'idle');
       const followed = follow.on && follow.sid === s.id; // 文件跟随正盯着这个 tab
       t.className = 'term-tab' + (s.id === this.active ? ' active' : '') + (s.unread ? ' unread' : '') + (followed ? ' following' : '');
-      const dotTitle = s.dead ? '进程已退出' : (s.status === 'busy' ? 'Codex 运行中' : '空闲');
+      const dotTitle = s.dead ? '进程已退出' : (s.status === 'busy' ? (s.kind === 'service' ? '服务有输出' : 'Codex 运行中') : '空闲');
       // 终端图标按项目路径染色：同项目同色，和面包屑的配对色点呼应
       const hue = this.hueOf(s.cwd || s.startDir);
-      t.title = followed ? '文件跟随正盯着这个终端 · 双击跳到它所在目录' : '双击：文件区跳到该终端所在目录';
+      t.title = s.kind === 'service' ? '服务输出，关闭只收起视图' : (followed ? '文件跟随正盯着这个终端 · 双击跳到它所在目录' : '双击：文件区跳到该终端所在目录');
       const eye = followed ? `<span class="tab-eye" title="文件跟随盯着它">${ic('eye', 'currentColor', 11)}</span>` : '';
-      t.innerHTML = `<span class="tab-dot ${dotState}" title="${dotTitle}"></span>${eye}${ic('term', `hsl(${hue} 62% 48%)`, 12)}<span>${escapeHtml(s.title)}</span><span class="tab-x" title="关闭">✕</span>`;
+      t.innerHTML = `<span class="tab-dot ${dotState}" title="${dotTitle}"></span>${eye}${ic('term', `hsl(${hue} 62% 48%)`, 12)}<span>${escapeHtml(s.title)}</span><span class="tab-x" title="${s.kind === 'service' ? '收起输出' : '关闭'}">✕</span>`;
       t.onclick = (e) => { if (e.target.classList.contains('tab-x')) { this.closeTab(s.id); return; } this.activate(s.id); };
       t.ondblclick = (e) => { if (e.target.classList.contains('tab-x')) return; this.locateCwd(); };
       bar.appendChild(t);

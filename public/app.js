@@ -14,6 +14,7 @@ import { createTerminalController } from './modules/terminal.js';
 import { createTerminalShortcutActions } from './modules/terminal-shortcuts.js';
 import { createFileFollowController } from './modules/file-follow.js';
 import { createImageEditor } from './modules/image-editor.js';
+import { createProjectRunController } from './modules/project-run.js';
 import { createFileBrowserController } from './modules/file-browser.js';
 import { createPreviewController } from './modules/preview.js';
 import { createFileActionsController } from './modules/file-actions.js';
@@ -137,6 +138,7 @@ let loadRoots, renderRootsActive, loadFavorites, renderFavs, loadCodexProjects, 
 let cmdk;
 let term;
 let gitPanel;
+let projectRun;
 
 let maybeShowGuide, bindResizer, bindTerminalResizer, codexResumeLast, bindCodexControls, bindEvents, updateGridSizeVisibility, applyTheme;
 let undoImage;
@@ -252,7 +254,7 @@ function setupControllers() {
   } = createFileBrowserController({
     $, guardDirty, follow,
     restoreFileAreaIfHidden: (...args) => restoreFileAreaIfHidden(...args),
-    api, toast, state, renderRootsActive: (...args) => renderRootsActive(...args), term: termProxy,
+    api, toast, state, renderRootsActive: (...args) => renderRootsActive(...args), renderProjectRunActions: (...args) => projectRun?.render(...args), term: termProxy,
     openPreview: (...args) => openPreview(...args), setFileFollow: (...args) => setFileFollow(...args),
     recordRecent, toggleFav, iconSvg, fmtSize, fmtTime, isFav, escapeHtml, openWith,
     showContextMenu, baseOf, ic, svgWrap, SVG, diskPanel, releasePanel, iconColorFor, refresh,
@@ -300,6 +302,11 @@ function setupControllers() {
     openPreview, renderFiles, toggleFav, toast, confirmDialog, popupMenu,
     codexProjects: codexProjectsService, favorites: favoritesService, roots: rootsService,
   }));
+  projectRun = createProjectRunController({
+    $, state, api, apiPost, term, inputDialog, popupMenu, toast, ic,
+    setRunningRoots: (roots) => codexProjectsService.setRunningRoots(roots),
+  });
+  projectRun.startPolling();
   cmdk = createCommandPalette({
     $, api, state, tilde, iconSvg, escapeHtml, openWith, navigate, recordRecent, dirOf,
     openPreview, renderFiles,

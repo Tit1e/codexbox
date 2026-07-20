@@ -8,7 +8,7 @@
   import ProjectDirectory from './ProjectDirectory.svelte';
 
   let { listDirectories, navigate, makeDraggable, openMenu, folderIcon } = $props();
-  let projects = $state([]), activePath = $state(''), now = $state(Date.now());
+  let projects = $state([]), activePath = $state(''), now = $state(Date.now()), runningRoots = $state([]);
 
   export function render(list, currentPath) {
     projects = list;
@@ -16,6 +16,7 @@
     now = Date.now();
   }
   export function setActive(path) { activePath = path; }
+  export function setRunningRoots(roots) { runningRoots = Array.isArray(roots) ? roots : []; }
 
   function agoShort(ms) {
     const minutes = Math.round((now - ms) / 60000);
@@ -37,6 +38,7 @@
       {navigate}
       {makeDraggable}
       {folderIcon}
+      {runningRoots}
       showTime
       activeText={agoShort(project.lastActive)}
       title={`${project.path}\nCodex · ${agoShort(project.lastActive)}前活跃`}

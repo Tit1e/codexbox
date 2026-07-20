@@ -36,6 +36,24 @@
 /* 项目配对色点：和终端标签的图标同色，扫一眼知道文件区与哪个终端是一伙的 */
 .breadcrumb .crumb-proj { width: 7px; height: 7px; border-radius: 50%; margin-left: 6px; flex: none; align-self: center; }
 
+/* 目录运行命令是面包屑的同级动作槽，路径再长也只压缩路径本身。 */
+.project-run-actions { display: flex; align-items: center; gap: 4px; flex: none; min-height: 30px; }
+.project-run-btn {
+  width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--bg-3); color: var(--text-dim); cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease, transform 0.12s ease;
+}
+.project-run-btn svg { display: block; flex: none; }
+.project-run-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.project-run-btn:active:not(:disabled) { transform: scale(0.96); }
+.project-run-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.project-run-btn:disabled { cursor: wait; opacity: 0.48; }
+.project-run-start { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.project-run-restart { color: var(--accent); }
+.project-run-stop { color: var(--danger, #b34f43); }
+.project-run-status { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+.project-run-dot { width: 8px; height: 8px; display: block; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 17%, transparent); }
+
 /* 右侧操作区永不收缩变形——挤压压力全部交给面包屑（它能横向滚动） */
 .topbar-actions { display: flex; align-items: center; gap: 10px; flex: none; white-space: nowrap; }
 .topbar-icon-btn {

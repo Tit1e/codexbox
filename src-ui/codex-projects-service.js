@@ -22,5 +22,6 @@ export function createCodexProjectsService({ target, api, navigate, makeDraggabl
   return {
     render: (projects, activePath) => ensure().render(projects, activePath),
     setActive: (path) => ensure().setActive(path),
+    setRunningRoots: (roots) => ensure().setRunningRoots(roots),
   };
 }

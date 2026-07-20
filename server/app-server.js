@@ -16,7 +16,7 @@ function createAppServer(options) {
     defaultRoots, listDir, readFile, serveRaw, serveHtmlPreview, serveThumb, searchFiles, grepFiles, contentSearch,
     termVerify, locatePath, gitStatus, gitFileDiff, openInOS, updateConfig, writeTextFile, archiveList, diskUsage,
     organizeLaunch, releaseInspect, releasePrepare, trashPath, movePath, renamePath, saveImage, createEntry,
-    inspectCodexProjectSessions, mutateCodexProjectSessions, codexProjects, readConfig, serveStatic,
+    inspectCodexProjectSessions, mutateCodexProjectSessions, codexProjects, readConfig, ruleFor, saveRule, serveStatic,
   } = options.services;
 const server = http.createServer(async (req, res) => {
   if (!hostAllowed(req)) { res.writeHead(403); res.end('forbidden host'); return; }
@@ -110,6 +110,10 @@ const server = http.createServer(async (req, res) => {
       const lang = b.lang === 'en' ? 'en' : 'zh';
       await updateConfig((c) => { c.lang = lang; });
       return sendJSON(res, 200, { ok: true, lang });
+    }
+    if (p === '/api/run-rule') {
+      if (req.method === 'POST') return sendJSON(res, 200, await saveRule(await readBody(req)));
+      return sendJSON(res, 200, await ruleFor(qp.get('path') || HOME));
     }
     if (p === '/api/organize/launch' && req.method === 'POST') {
       return sendJSON(res, 200, await organizeLaunch(await readBody(req)));
