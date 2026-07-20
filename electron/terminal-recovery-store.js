@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js fs/path，以 Electron userData 下的 JSON 文件持久化终端恢复记录
- * [OUTPUT]: 对外提供 createTerminalRecoveryStore，支持列出、合并、一次性取出与清空恢复命令
+ * [OUTPUT]: 对外提供 createTerminalRecoveryStore，支持列出、合并、一次性取出与清空带服务规则标识的恢复命令
  * [POS]: electron 模块的终端恢复仓储，被退出守卫与恢复 IPC 共同消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -13,7 +13,8 @@ const crypto = require('crypto');
 function validEntry(value) {
   return value && typeof value.cwd === 'string' && path.isAbsolute(value.cwd)
     && typeof value.command === 'string' && value.command.trim() && value.command.length <= 16384
-    && (value.kind === undefined || value.kind === 'service');
+    && (value.kind === undefined || value.kind === 'service')
+    && (value.serviceKey === undefined || (typeof value.serviceKey === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value.serviceKey)));
 }
 
 function createTerminalRecoveryStore(userData, fileSystem = fs) {
@@ -41,7 +42,7 @@ function createTerminalRecoveryStore(userData, fileSystem = fs) {
       else next.push({
         id: crypto.randomUUID(), cwd: item.cwd, command: item.command,
         title: item.title || path.basename(item.cwd), savedAt: now,
-        ...(item.kind === 'service' ? { kind: 'service' } : {}),
+        ...(item.kind === 'service' ? { kind: 'service', serviceKey: item.serviceKey } : {}),
       });
     }
     write(next);

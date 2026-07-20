@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js path、Buffer 与调用方注入的文件系统能力
- * [OUTPUT]: 对外提供 PTY、目录监听、拖入文件和更新 IPC 的纯参数校验函数
+ * [OUTPUT]: 对外提供 PTY、运行服务标识、目录监听、拖入文件和更新 IPC 的纯参数校验函数
  * [POS]: electron 模块的 IPC 安全契约，被主进程处理器和 Node 测试共同消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -11,9 +11,14 @@ const path = require('path');
 const MAX_PTY_INPUT = 1024 * 1024;
 const MAX_DROP_BYTES = 64 * 1024 * 1024;
 const MAX_WATCH_DIRS = 24;
+const MAX_SERVICE_KEY_LENGTH = 128;
 
 function validPtyId(value) {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function validServiceKey(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value);
 }
 
 function normalizeTerminalSize(cols, rows) {
@@ -75,7 +80,9 @@ module.exports = {
   MAX_DROP_BYTES,
   MAX_PTY_INPUT,
   MAX_WATCH_DIRS,
+  MAX_SERVICE_KEY_LENGTH,
   validPtyId,
+  validServiceKey,
   normalizeTerminalSize,
   validPtyInput,
   validDirectory,

@@ -1,6 +1,6 @@
 <!--
   [INPUT]: 依赖项目数据、当前目录、目录读取以及导航/拖拽/菜单回调
-  [OUTPUT]: 对外提供 render/setActive 接口，声明式渲染 Codex 项目与可展开目录树
+  [OUTPUT]: 对外提供 render/setActive/setRunningRoots 接口，声明式渲染 Codex 项目与顶层服务状态
   [POS]: src-ui 的 Codex 项目列表界面岛，不承担会话归档与删除业务
   [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 -->
@@ -25,6 +25,10 @@
     if (minutes < 1440) return `${Math.round(minutes / 60)} 时`;
     return `${Math.round(minutes / 1440)} 天`;
   }
+  function hasRunningService(projectPath) {
+    const prefix = projectPath.endsWith('/') ? projectPath : `${projectPath}/`;
+    return runningRoots.some((root) => root === projectPath || root.startsWith(prefix));
+  }
 </script>
 
 {#if !projects.length}
@@ -38,7 +42,7 @@
       {navigate}
       {makeDraggable}
       {folderIcon}
-      {runningRoots}
+      runningService={hasRunningService(project.path)}
       showTime
       activeText={agoShort(project.lastActive)}
       title={`${project.path}\nCodex · ${agoShort(project.lastActive)}前活跃`}

@@ -40,7 +40,10 @@ test('Codex 项目列表渲染活动项并支持展开、导航和菜单', async
     project.click();
     assert.deepEqual(calls.find((call) => call[0] === 'navigate'), ['navigate', '/repo']);
     service.setActive('/repo/src');
+    service.setRunningRoots(['/repo/src']);
     await settle();
     assert.equal(document.querySelector('li[data-path="/repo/src"]').classList.contains('active'), true);
+    assert.ok(project.querySelector('.project-run-indicator'));
+    assert.equal(document.querySelector('li[data-path="/repo/src"] .project-run-indicator'), null);
   } finally { dom.cleanup(); }
 });

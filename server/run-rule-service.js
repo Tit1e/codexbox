@@ -1,18 +1,24 @@
 /**
  * [INPUT]: 依赖 Node.js path、路径规整器与配置读写服务
- * [OUTPUT]: 对外提供 createRunRuleService，读写单目录运行规则并按最长祖先目录解析生效规则
+ * [OUTPUT]: 对外提供 createRunRuleService，读写带稳定 ID 的单目录运行规则、支持移除并按最长祖先目录解析生效规则
  * [POS]: server 模块的项目运行命令领域服务，被 app-server.js 暴露给渲染层配置界面
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
 'use strict';
 
+const { createHash, randomUUID } = require('crypto');
 const path = require('path');
 
 const MAX_COMMAND_LENGTH = 16384;
+const RULE_ID_RE = /^[a-zA-Z0-9_-]{8,128}$/;
 
 function isAncestorPath(ancestor, target) {
   const relative = path.relative(ancestor, target);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+function legacyRuleId(cwd) {
+  return `legacy_${createHash('sha256').update(cwd).digest('hex').slice(0, 24)}`;
 }
 
 function createRunRuleService({ resolvePath, readConfig, updateConfig }) {
@@ -31,13 +37,17 @@ function createRunRuleService({ resolvePath, readConfig, updateConfig }) {
     return command;
   }
 
+  function normalizeRuleId(value, cwd) {
+    return typeof value === 'string' && RULE_ID_RE.test(value) ? value : legacyRuleId(cwd);
+  }
+
   function rulesFrom(config) {
     const byDirectory = new Map();
     for (const item of Array.isArray(config.runRules) ? config.runRules : []) {
       try {
         const cwd = normalizeDirectory(item?.cwd);
         const command = normalizeCommand(item?.command);
-        byDirectory.set(cwd, { cwd, command });
+        byDirectory.set(cwd, { id: normalizeRuleId(item?.id, cwd), cwd, command });
       } catch { /* 忽略旧版或损坏的单条配置，不影响其余规则 */ }
     }
     return [...byDirectory.values()];
@@ -60,14 +70,27 @@ function createRunRuleService({ resolvePath, readConfig, updateConfig }) {
     const cwd = normalizeDirectory(value);
     const command = normalizeCommand(valueCommand);
     const config = await updateConfig((current) => {
+      const currentRule = rulesFrom(current).find((item) => item.cwd === cwd);
       const rules = rulesFrom(current).filter((item) => item.cwd !== cwd);
-      rules.push({ cwd, command });
+      rules.push({ id: currentRule?.id || randomUUID(), cwd, command });
       current.runRules = rules.sort((left, right) => left.cwd.localeCompare(right.cwd));
     });
     return { ok: true, rule: rulesFrom(config).find((item) => item.cwd === cwd) };
   }
 
-  return { ruleFor, saveRule };
+  async function removeRule({ path: value }) {
+    const cwd = normalizeDirectory(value);
+    let removed = false;
+    await updateConfig((current) => {
+      const rules = rulesFrom(current);
+      const next = rules.filter((item) => item.cwd !== cwd);
+      removed = next.length !== rules.length;
+      current.runRules = next.sort((left, right) => left.cwd.localeCompare(right.cwd));
+    });
+    return { ok: true, removed };
+  }
+
+  return { ruleFor, saveRule, removeRule };
 }
 
-module.exports = { createRunRuleService, isAncestorPath };
+module.exports = { createRunRuleService, isAncestorPath, legacyRuleId };

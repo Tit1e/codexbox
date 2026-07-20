@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Electron PTY/恢复桥、xterm 浏览器资源、terminal-shortcuts.js 工厂、共享 state/follow 与文件导航回调
- * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、隐藏服务会话、命令恢复、Codex 启动、命令重启、状态、拖放和布局
+ * [OUTPUT]: 对外提供 createTerminalController，管理多终端标签、带规则标识的隐藏服务会话、命令恢复、Codex 启动、命令重启、状态、拖放和布局
  * [POS]: public/modules 的终端领域控制器，被应用事件层和文件跟随模块消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -141,7 +141,12 @@ const term = {
     let restored = 0;
     for (const entry of entries) {
       if (entry.kind === 'service') {
-        const result = await this.startProjectRun(entry.cwd, entry.command);
+        const result = await this.startProjectRun({
+          id: entry.serviceKey || `legacy_${this.serviceRecoveryKey(entry)}`,
+          cwd: entry.cwd,
+          command: entry.command,
+          recovered: !entry.serviceKey,
+        });
         if (result.ok) restored++;
         continue;
       }
@@ -318,6 +323,8 @@ const term = {
       title: options.title || baseOf(startDir || '') || 'shell', kind,
       projectRoot: kind === 'service' ? (options.projectRoot || startDir) : null,
       projectCommand: kind === 'service' ? (options.projectCommand || '') : '',
+      projectRuleId: kind === 'service' ? (options.projectRuleId || '') : '',
+      recoveredService: kind === 'service' && options.recoveredService === true,
       revealed: false,
     };
     this.sessions.push(sess);
@@ -325,7 +332,8 @@ const term = {
     else this.renderTabs();
     updateWatches(); // 新终端的项目目录也纳入监听
     const r = await window.codexboxPty.spawn({
-      id, cwd: startDir, cols: kind === 'service' ? 120 : xterm.cols, rows: kind === 'service' ? 24 : xterm.rows, kind,
+      id, cwd: startDir, cols: kind === 'service' ? 120 : xterm.cols, rows: kind === 'service' ? 24 : xterm.rows,
+      kind, serviceKey: kind === 'service' ? sess.projectRuleId : undefined,
     });
     if (!r.ok) { sess.dead = true; xterm.write('\r\n  \x1b[31m终端启动失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || startDir; // 末尾 renderTabs 统一带上 cwd 重画
@@ -521,49 +529,62 @@ const term = {
     return sess;
   },
   tabSessions() { return this.sessions.filter((session) => session.kind !== 'service' || session.revealed); },
-  serviceSession(root) { return this.sessions.find((session) => session.kind === 'service' && session.projectRoot === root); },
-  async startProjectRun(root, command) {
+  serviceRecoveryKey({ cwd, command }) {
+    let hash = 5381;
+    for (const char of `${cwd}\n${command}`) hash = ((hash * 33) ^ char.charCodeAt(0)) >>> 0;
+    return hash.toString(36).padStart(8, '0');
+  },
+  serviceSession(rule) {
+    return this.sessions.find((session) => session.kind === 'service'
+      && (session.projectRuleId === rule.id
+        || (session.recoveredService && session.projectRoot === rule.cwd && session.projectCommand === rule.command)));
+  },
+  async startProjectRun(rule) {
     if (!this.available()) return { ok: false, error: '内嵌终端不可用（网页版没有运行服务）' };
-    let session = this.serviceSession(root);
+    if (!rule?.id || !rule.cwd || !rule.command) return { ok: false, error: '运行命令配置无效' };
+    let session = this.serviceSession(rule);
     if (session && !session.dead) {
-      session.projectCommand = command;
+      session.projectCommand = rule.command;
       const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
       if (foreground?.ok && foreground.running) return { ok: true, id: session.id, running: true, reused: true };
     } else {
-      session = await this.newTab(root, { kind: 'service', projectRoot: root, projectCommand: command, title: baseOf(root) || 'service' });
+      session = await this.newTab(rule.cwd, {
+        kind: 'service', projectRoot: rule.cwd, projectCommand: rule.command, projectRuleId: rule.id,
+        recoveredService: rule.recovered === true, title: baseOf(rule.cwd) || 'service',
+      });
     }
     if (!session || session.dead) return { ok: false, error: '运行服务启动失败' };
-    this.input(session.id, command + '\r');
+    this.input(session.id, rule.command + '\r');
     return { ok: true, id: session.id, running: true };
   },
-  async projectRunState(root) {
-    const session = this.serviceSession(root);
-    if (!session || session.dead) return { root, running: false };
+  async projectRunState(rule) {
+    const session = this.serviceSession(rule);
+    if (!session || session.dead) return { root: rule.cwd, ruleId: rule.id, running: false };
     try {
       const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
-      return { root, id: session.id, command: session.projectCommand, running: foreground?.ok === true && foreground.running === true };
-    } catch { return { root, id: session.id, command: session.projectCommand, running: false }; }
+      return { root: rule.cwd, ruleId: rule.id, id: session.id, command: session.projectCommand, running: foreground?.ok === true && foreground.running === true };
+    } catch { return { root: rule.cwd, ruleId: rule.id, id: session.id, command: session.projectCommand, running: false }; }
   },
   async projectRunStates() {
     return Promise.all(this.sessions
       .filter((session) => session.kind === 'service')
-      .map((session) => this.projectRunState(session.projectRoot)));
+      .map((session) => this.projectRunState({ id: session.projectRuleId, cwd: session.projectRoot, command: session.projectCommand })));
   },
-  async restartProjectRun(root) {
-    const session = this.serviceSession(root);
+  async restartProjectRun(rule) {
+    const session = this.serviceSession(rule);
     if (!session || session.dead) return { ok: false, error: '运行服务不存在' };
     return window.codexboxPty.restartCommand(session.id);
   },
-  async stopProjectRun(root) {
-    const session = this.serviceSession(root);
+  async stopProjectRun(rule) {
+    const session = this.serviceSession(rule);
     if (!session || session.dead) return { ok: false, error: '运行服务不存在' };
     const foreground = await window.codexboxPty.hasForegroundProcess(session.id);
     if (!foreground?.ok || !foreground.running) return { ok: false, error: '当前没有正在运行的命令' };
     this.input(session.id, '\x03');
     return { ok: true };
   },
-  revealProjectRun(root) {
-    const session = this.serviceSession(root);
+  revealProjectRun(rule) {
+    const session = this.serviceSession(rule);
     if (!session || session.dead) return false;
     session.revealed = true;
     $('#terminal-panel').classList.remove('hidden');
@@ -596,7 +617,10 @@ const term = {
   async respawn(sess) {
     sess.dead = false;
     sess.xterm.reset(); // 清掉死亡残留，新 shell 提示符不和旧画面叠在一起
-    const r = await window.codexboxPty.spawn({ id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows, kind: sess.kind });
+    const r = await window.codexboxPty.spawn({
+      id: sess.id, cwd: sess.startDir || state.cwd, cols: sess.xterm.cols, rows: sess.xterm.rows,
+      kind: sess.kind, serviceKey: sess.kind === 'service' ? sess.projectRuleId : undefined,
+    });
     if (!r.ok) { sess.dead = true; sess.xterm.write('\x1b[31m重开失败：' + (r.error || '') + '\x1b[0m\r\n'); }
     else sess.cwd = r.cwd || sess.startDir;
   },
@@ -737,6 +761,12 @@ const term = {
   markBusy(s) {
     const now = Date.now();
     $('#terminal-panel').classList.remove('term-awaiting'); // 又有动静了，撤掉「轮到你」呼吸
+    // 运行服务只保留输出和未读状态，不能借用 Codex 的“任务完成”通知逻辑。
+    if (s.kind === 'service') {
+      s.lastData = now;
+      if (s.id !== this.active && s.revealed && !s.unread) { s.unread = true; this.renderTabs(); }
+      return;
+    }
     // 回显过滤：距上次用户输入 <400ms 的输出多半是回显/TUI 重绘，不算 agent 自主干活：
     // 不进入 busy、不推 busyStart；已在 busy 则只续命（agent 干活时排队打字不打断）。
     // 续命只刷新 lastData（推迟评估时机），不刷新 lastReal（任务时长只数自发输出，打字不算工时）

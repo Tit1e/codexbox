@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖浏览器 window 全局对象，收录 index.html 与 app.js 使用的中文界面文案
- * [OUTPUT]: 对外提供 CODEXBOX_DICT 静态词典和 CODEXBOX_DICT_RULES 动态翻译规则
+ * [OUTPUT]: 对外提供 CODEXBOX_DICT 静态词典和 CODEXBOX_DICT_RULES 动态翻译规则，覆盖项目运行命令
  * [POS]: public 模块的英文词典真源，由 i18n.js 在运行时消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -334,6 +334,35 @@ window.CODEXBOX_DICT = {
   '终端已退出': 'Terminal exited',
   '[进程已退出 — 回车重开，或 ✕ 关闭]': '[Process exited — Enter to restart, or ✕ to close]',
   '没有可切换的终端标签': 'No terminal tabs to switch to',
+
+  // ---------- 项目运行命令 ----------
+  '设置运行命令': 'Configure project command',
+  '运行项目命令': 'Run project command',
+  '查看服务输出': 'Show service output',
+  '重新运行项目命令': 'Restart project command',
+  '停止项目命令': 'Stop project command',
+  '例如 npm run dev': 'For example, npm run dev',
+  '请先停止正在运行的命令': 'Stop the running command first',
+  '运行命令已保存': 'Project command saved',
+  '保存运行命令失败': 'Failed to save the project command',
+  '编辑运行命令': 'Edit project command',
+  '编辑继承的命令': 'Edit inherited command',
+  '在当前目录新建覆盖': 'Add override in this folder',
+  '移除运行命令': 'Remove project command',
+  '运行命令已移除': 'Project command removed',
+  '移除运行命令失败': 'Failed to remove the project command',
+  '已启动项目命令': 'Project command started',
+  '正在重新运行项目命令': 'Restarting project command',
+  '正在停止项目命令': 'Stopping project command',
+  '运行命令失败': 'Project command failed',
+  '运行命令配置无效': 'Invalid project command configuration',
+  '运行服务启动失败': 'Failed to start project service',
+  '运行服务不存在': 'Project service is unavailable',
+  '内嵌终端不可用（网页版没有运行服务）': 'Embedded terminal unavailable for project services',
+  '服务有输出': 'Service has output',
+  '服务输出，关闭只收起视图': 'Service output. Closing only hides this view',
+  '收起输出': 'Hide output',
+  '运行服务已退出': 'Project service exited',
 
   // ---------- 更新提示 ----------
   '去下载': 'Download',

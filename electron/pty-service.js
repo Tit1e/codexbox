@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node-pty、Node.js 文件/进程/随机数能力、shell-integration.js 与 ipc-validation.js 安全契约
- * [OUTPUT]: 对外提供 createPtyService，统一管理终端、认证命令追踪、安全重启、运行任务快照和销毁
+ * [OUTPUT]: 对外提供 createPtyService，统一管理终端、带规则标识的服务会话、认证命令追踪、安全重启、运行任务快照和销毁
  * [POS]: electron 模块的终端领域服务，由 main.js 装配并被 IPC 处理器调用
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -11,7 +11,7 @@ const os = require('os');
 const fs = require('fs');
 const { randomBytes } = require('crypto');
 const { exec, execFile } = require('child_process');
-const { validPtyId, normalizeTerminalSize, validPtyInput, validDirectory } = require('./ipc-validation');
+const { validPtyId, validServiceKey, normalizeTerminalSize, validPtyInput, validDirectory } = require('./ipc-validation');
 const { consumeShellMarkers } = require('./shell-integration');
 
 function decodeLsofPath(value) {
@@ -64,10 +64,12 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
     pending.resolve(result);
   }
 
-  function spawn({ id, cwd, cols, rows, kind }) {
+  function spawn({ id, cwd, cols, rows, kind, serviceKey }) {
     if (!pty) return { ok: false, error: 'node-pty 未编译，跑：npm run rebuild' };
     if (!validPtyId(id)) return { ok: false, error: '终端 ID 非法' };
     if (terminals.has(id)) return { ok: false, error: '终端 ID 已存在' };
+    const isService = kind === 'service';
+    if (isService && !validServiceKey(serviceKey)) return { ok: false, error: '运行服务标识非法' };
     const shellPath = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
     const startCwd = validDirectory(cwd, fs) ? path.resolve(cwd) : os.homedir();
     const size = normalizeTerminalSize(cols, rows);
@@ -89,7 +91,7 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
         name: 'xterm-256color', cols: size.cols, rows: size.rows, cwd: startCwd, env,
       });
     } catch (err) { return { ok: false, error: err.message }; }
-    const record = { terminal, startCwd, command: '', kind: kind === 'service' ? 'service' : 'terminal', markerToken, markerState: { carry: '' }, restart: null };
+    const record = { terminal, startCwd, command: '', kind: isService ? 'service' : 'terminal', serviceKey: isService ? serviceKey : '', markerToken, markerState: { carry: '' }, restart: null };
     terminals.set(id, record);
     notifyCount();
     terminal.onData((data) => {
@@ -209,7 +211,7 @@ function createPtyService({ pty, send = () => {}, onCountChange = () => {}, fore
         return {
           running: true, cwd: cwdValue || record.startCwd, command: record.command,
           title: path.basename(cwdValue || record.startCwd) || 'shell',
-          ...(record.kind === 'service' ? { kind: 'service' } : {}),
+          ...(record.kind === 'service' ? { kind: 'service', serviceKey: record.serviceKey } : {}),
         };
       } catch { return null; }
     }));

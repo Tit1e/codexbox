@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖运行规则 API、终端服务会话、通用输入/菜单交互与当前目录 state
- * [OUTPUT]: 对外提供 createProjectRunController，管理顶栏运行动作、规则设置和项目运行状态
+ * [OUTPUT]: 对外提供 createProjectRunController，管理顶栏运行动作、规则设置/移除和项目运行状态
  * [POS]: public/modules 的项目运行命令控制器，连接目录规则、隐藏 PTY 服务与侧边栏状态
  * [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
  */
@@ -9,15 +9,17 @@ export function createProjectRunController(deps) {
   let context = { path: null, rule: null, running: false, loading: false, action: '' };
   let requestId = 0;
   const pendingRoots = new Map();
+  let latestStates = [];
 
   const enabled = () => !!(window.codexboxEnv?.isDesktopApp && term.available());
-  const rootIsRunning = (root) => context.running && context.rule?.cwd === root;
+  const ruleIsRunning = (rule) => context.running && context.rule?.id === rule.id;
 
   function button(className, label, icon, handler, disabled = false) {
     const element = document.createElement('button');
     element.type = 'button';
     element.className = `project-run-btn ${className}`;
     element.setAttribute('aria-label', label);
+    element.title = label;
     element.disabled = disabled;
     element.innerHTML = icon;
     element.onclick = handler;
@@ -41,7 +43,7 @@ export function createProjectRunController(deps) {
     }
 
     host.appendChild(button('project-run-status', '查看服务输出', '<span class="project-run-dot" aria-hidden="true"></span>', () => {
-      term.revealProjectRun(context.rule.cwd);
+      term.revealProjectRun(context.rule);
     }, locked));
     host.appendChild(button('project-run-restart', '重新运行项目命令', ic('redo', 'currentColor', 15), () => void restart(), locked));
     host.appendChild(button('project-run-stop', '停止项目命令', ic('stop', 'currentColor', 14), () => void stop(), locked));
@@ -66,21 +68,25 @@ export function createProjectRunController(deps) {
 
   async function refreshRuntime() {
     if (!enabled()) return;
-    let states = [];
-    try { states = await term.projectRunStates(); } catch { /* 单次进程检测失败，不清掉上一帧状态 */ }
+    let states = latestStates;
+    try { states = await term.projectRunStates(); latestStates = states; } catch { /* 单次进程检测失败，保留上一帧状态 */ }
     const now = Date.now();
-    for (const [root, until] of pendingRoots) {
-      if (until <= now) pendingRoots.delete(root);
+    for (const [ruleId, pending] of pendingRoots) {
+      if (pending.until <= now) pendingRoots.delete(ruleId);
     }
+    const runningRules = new Set(states.filter((item) => item.running).map((item) => item.ruleId));
     const runningRoots = new Set(states.filter((item) => item.running).map((item) => item.root));
-    pendingRoots.forEach((_until, root) => runningRoots.add(root));
+    pendingRoots.forEach((pending, ruleId) => {
+      runningRules.add(ruleId);
+      runningRoots.add(pending.root);
+    });
     setRunningRoots([...runningRoots]);
-    if (context.path === state.cwd && context.rule) context.running = runningRoots.has(context.rule.cwd);
+    if (context.path === state.cwd && context.rule) context.running = runningRules.has(context.rule.id);
     render();
   }
 
   async function saveRule(path, value) {
-    if (rootIsRunning(path)) { toast('请先停止正在运行的命令', true); return; }
+    if (context.rule && context.rule.cwd === path && ruleIsRunning(context.rule)) { toast('请先停止正在运行的命令', true); return; }
     const command = await inputDialog('设置运行命令', value || '', '例如 npm run dev');
     if (!command) return;
     context.action = 'save';
@@ -98,22 +104,39 @@ export function createProjectRunController(deps) {
 
   function configure(event) {
     if (!context.rule) { void saveRule(context.path, ''); return; }
-    if (!context.rule.inherited) { void saveRule(context.rule.cwd, context.rule.command); return; }
+    const rule = context.rule;
     popupMenu(event, [
-      { label: '编辑继承的命令', fn: () => saveRule(context.rule.cwd, context.rule.command) },
-      { label: '在当前目录新建覆盖', fn: () => saveRule(context.path, '') },
+      { label: rule.inherited ? '编辑继承的命令' : '编辑运行命令', fn: () => saveRule(rule.cwd, rule.command) },
+      ...(rule.inherited
+        ? [{ label: '在当前目录新建覆盖', fn: () => saveRule(context.path, '') }]
+        : [{ label: '移除运行命令', danger: true, fn: () => void removeRule(rule) }]),
     ]);
+  }
+
+  async function removeRule(rule) {
+    if (ruleIsRunning(rule)) { toast('请先停止正在运行的命令', true); return; }
+    context.action = 'remove';
+    render();
+    try {
+      const result = await apiPost('/api/run-rule/delete', { path: rule.cwd });
+      if (!result.ok) { toast(result.error || '移除运行命令失败', true); return; }
+      toast('运行命令已移除');
+      await loadRule(state.cwd);
+    } catch { toast('移除运行命令失败', true); }
+    finally {
+      if (context.path === state.cwd) { context.action = ''; render(); }
+    }
   }
 
   async function runAction(name, action) {
     if (!context.rule || context.action) return;
-    const root = context.rule.cwd;
+    const rule = context.rule;
     context.action = name;
-    if (name !== 'stop') pendingRoots.set(root, Date.now() + 5000);
-    else pendingRoots.delete(root);
+    if (name !== 'stop') pendingRoots.set(rule.id, { root: rule.cwd, until: Date.now() + 5000 });
+    else pendingRoots.delete(rule.id);
     render();
     try {
-      const result = await action(root);
+      const result = await action(rule);
       if (!result?.ok) toast(result?.error || '运行命令失败', true);
       else if (name === 'start') toast('已启动项目命令');
       else if (name === 'restart') toast('正在重新运行项目命令');
@@ -125,9 +148,9 @@ export function createProjectRunController(deps) {
     }
   }
 
-  const start = () => runAction('start', (root) => term.startProjectRun(root, context.rule.command));
-  const restart = () => runAction('restart', (root) => term.restartProjectRun(root));
-  const stop = () => runAction('stop', (root) => term.stopProjectRun(root));
+  const start = () => runAction('start', (rule) => term.startProjectRun(rule));
+  const restart = () => runAction('restart', (rule) => term.restartProjectRun(rule));
+  const stop = () => runAction('stop', (rule) => term.stopProjectRun(rule));
 
   function startPolling() {
     if (!enabled()) return;

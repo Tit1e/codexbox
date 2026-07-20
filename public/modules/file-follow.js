@@ -363,9 +363,12 @@ if (window.codexboxPty) {
     const s = term.sessions.find((x) => x.id === id);
     if (s) {
       s.dead = true; s.status = 'dead';
-      s.xterm.write('\r\n\x1b[90m[进程已退出 — 回车重开，或 ✕ 关闭]\x1b[0m\r\n');
+      const service = s.kind === 'service';
+      s.xterm.write(service
+        ? '\r\n\x1b[90m[运行服务已退出]\x1b[0m\r\n'
+        : '\r\n\x1b[90m[进程已退出 — 回车重开，或 ✕ 关闭]\x1b[0m\r\n');
       term.renderTabs();
-      term.notify(s, '终端已退出', (s.title || 'shell') + ' 的进程结束了');
+      if (!service) term.notify(s, '终端已退出', (s.title || 'shell') + ' 的进程结束了');
     }
   });
 }

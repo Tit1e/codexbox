@@ -213,6 +213,37 @@ test('新建 Codex 会话快捷键只执行不带参数的 codex', async () => {
   } finally { dom.cleanup(); }
 });
 
+test('项目运行命令按规则目录创建隐藏服务会话，并以规则 ID 隔离同目录后续命令', async () => {
+  const dom = installDom();
+  try {
+    const { term } = createController();
+    const created = [];
+    const writes = [];
+    term.available = () => true;
+    term.newTab = async (cwd, options) => {
+      created.push([cwd, options]);
+      const session = {
+        id: 'service_1', dead: false, kind: 'service', projectRoot: cwd,
+        projectRuleId: options.projectRuleId, projectCommand: options.projectCommand,
+      };
+      term.sessions.push(session);
+      return session;
+    };
+    term.input = (id, value) => writes.push([id, value]);
+
+    const rule = { id: 'rule_child_01', cwd: '/repo/apps/web', command: 'pnpm dev' };
+    assert.deepEqual(await term.startProjectRun(rule), { ok: true, id: 'service_1', running: true });
+    assert.equal(created[0][0], '/repo/apps/web');
+    assert.equal(created[0][1].kind, 'service');
+    assert.equal(created[0][1].projectRoot, '/repo/apps/web');
+    assert.equal(created[0][1].projectCommand, 'pnpm dev');
+    assert.equal(created[0][1].projectRuleId, 'rule_child_01');
+    assert.deepEqual(writes, [['service_1', 'pnpm dev\r']]);
+    assert.equal(term.serviceSession({ ...rule, id: 'rule_other_01' }), undefined);
+    assert.equal(term.serviceSession(rule).id, 'service_1');
+  } finally { dom.cleanup(); }
+});
+
 test('新建终端快捷键会先展开已收起的终端面板', () => {
   const dom = installDom();
   try {

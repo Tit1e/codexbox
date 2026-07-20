@@ -18,6 +18,8 @@ test('PTY ID、输入与尺寸受到明确边界约束', () => {
   assert.equal(validation.validPtyId('term_1-abc'), true);
   assert.equal(validation.validPtyId('../term'), false);
   assert.equal(validation.validPtyId('x'.repeat(65)), false);
+  assert.equal(validation.validServiceKey('rule_12345678'), true);
+  assert.equal(validation.validServiceKey('../rule'), false);
   assert.equal(validation.validPtyInput('hello'), true);
   assert.equal(validation.validPtyInput('x'.repeat(validation.MAX_PTY_INPUT + 1)), false);
   assert.deepEqual(validation.normalizeTerminalSize(0, 9999), { cols: 2, rows: 300 });

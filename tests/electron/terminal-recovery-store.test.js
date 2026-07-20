@@ -38,3 +38,14 @@ test('选择恢复后只移除有效且被选中的记录', (t) => {
   assert.deepEqual(taken.map((entry) => entry.command), ['codex']);
   assert.equal(store.list().length, 1);
 });
+
+test('运行服务恢复记录保留规则标识', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codexbox-recovery-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const cwd = fs.mkdtempSync(path.join(root, 'project-'));
+  const store = createTerminalRecoveryStore(root);
+  store.merge([{ cwd, command: 'npm run dev', kind: 'service', serviceKey: 'rule_12345678' }]);
+  const [entry] = store.list();
+  assert.equal(entry.kind, 'service');
+  assert.equal(entry.serviceKey, 'rule_12345678');
+});

@@ -105,6 +105,26 @@ test('运行任务快照包含 Shell 集成捕获的原始顶层命令', async (
   assert.equal((await service.runningTaskSnapshots())[0].command, '');
 });
 
+test('运行服务快照保留规则标识，恢复时不会与同目录其他命令混淆', async () => {
+  let terminal;
+  const pty = { spawn() {
+    terminal = { pid: 72, write() {}, resize() {}, kill() {}, onData(handler) { this.dataHandler = handler; }, onExit() {} };
+    return terminal;
+  } };
+  const service = createPtyService({
+    pty,
+    foregroundProcess: async () => ({ ok: true, running: true }),
+    cwdLookup: async () => '/tmp/codexbox-project',
+    createShellToken: () => SHELL_TOKEN,
+  });
+  assert.equal(service.spawn({ id: 'service_1', cwd: process.cwd(), kind: 'service', serviceKey: 'rule_12345678' }).ok, true);
+  terminal.dataHandler(commandStart('pnpm dev'));
+  assert.deepEqual(await service.runningTaskSnapshots(), [{
+    running: true, cwd: '/tmp/codexbox-project', command: 'pnpm dev', title: 'codexbox-project', kind: 'service', serviceKey: 'rule_12345678',
+  }]);
+  assert.deepEqual(service.spawn({ id: 'service_2', cwd: process.cwd(), kind: 'service', serviceKey: '../bad' }), { ok: false, error: '运行服务标识非法' });
+});
+
 test('重新运行会先中断前台命令，等待 Shell 空闲后再执行原命令', async () => {
   let terminal;
   const pty = { spawn() {
